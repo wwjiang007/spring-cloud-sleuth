@@ -81,6 +81,7 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 	final ThreadLocalSpan threadLocalSpan;
 	final TraceContext.Injector<MessageHeaderAccessor> injector;
 	final TraceContext.Extractor<MessageHeaderAccessor> extractor;
+	final boolean integrationObjectSupportPresent;
 
 	TracingChannelInterceptor(Tracing tracing) {
 		this.tracing = tracing;
@@ -90,6 +91,9 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 				.injector(MessageHeaderPropagation.INSTANCE);
 		this.extractor = tracing.propagation()
 				.extractor(MessageHeaderPropagation.INSTANCE);
+		this.integrationObjectSupportPresent = ClassUtils.isPresent(
+				"org.springframework.integration.context.IntegrationObjectSupport",
+				null);
 	}
 
 	/**
@@ -120,7 +124,8 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		if (emptyMessage(message)) {
 			return message;
 		}
-		MessageHeaderAccessor headers = mutableHeaderAccessor(message);
+		Message<?> retrievedMessage = getMessage(message);
+		MessageHeaderAccessor headers = mutableHeaderAccessor(retrievedMessage);
 		TraceContextOrSamplingFlags extracted = this.extractor.extract(headers);
 		Span span = this.threadLocalSpan.next(extracted);
 		MessageHeaderPropagation
@@ -134,12 +139,22 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		if (log.isDebugEnabled()) {
 			log.debug("Created a new span in pre send" + span);
 		}
-		headers.setImmutable();
-		Message<?> outputMessage = new GenericMessage<>(message.getPayload(), headers.getMessageHeaders());
+		Message<?> outputMessage = outputMessage(message, retrievedMessage, headers);
 		if (isDirectChannel(channel)) {
 			beforeHandle(outputMessage, channel, null);
 		}
 		return outputMessage;
+	}
+
+	private Message<?> outputMessage(Message<?> originalMessage, Message<?> retrievedMessage, MessageHeaderAccessor additionalHeaders) {
+		MessageHeaderAccessor headers = MessageHeaderAccessor.getMutableAccessor(originalMessage);
+		if (originalMessage.getPayload() instanceof MessagingException) {
+			headers.copyHeaders(MessageHeaderPropagation.propagationHeaders(additionalHeaders.getMessageHeaders(),
+					this.tracing.propagation().keys()));
+			return new ErrorMessage((MessagingException) originalMessage.getPayload(), headers.getMessageHeaders());
+		}
+		headers.copyHeaders(additionalHeaders.getMessageHeaders());
+		return new GenericMessage<>(retrievedMessage.getPayload(), headers.getMessageHeaders());
 	}
 
 	private boolean isDirectChannel(MessageChannel channel) {
@@ -249,18 +264,16 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 	/**
 	 * When an upstream context was not present, lookup keys are unlikely added
 	 */
-	static void addTags(Message<?> message, SpanCustomizer result, MessageChannel channel) {
+	void addTags(Message<?> message, SpanCustomizer result, MessageChannel channel) {
 		// TODO topic etc
 		if (channel != null) {
 			result.tag("channel", messageChannelName(channel));
 		}
 	}
 
-	private static String channelName(MessageChannel channel) {
+	private String channelName(MessageChannel channel) {
 		String name = null;
-		if (ClassUtils.isPresent(
-				"org.springframework.integration.context.IntegrationObjectSupport",
-				null)) {
+		if (this.integrationObjectSupportPresent) {
 			if (channel instanceof IntegrationObjectSupport) {
 				name = ((IntegrationObjectSupport) channel).getComponentName();
 			}
@@ -274,7 +287,7 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		return name;
 	}
 
-	private static String messageChannelName(MessageChannel channel) {
+	private String messageChannelName(MessageChannel channel) {
 		return SpanNameUtil.shorten(channelName(channel));
 	}
 
@@ -292,7 +305,7 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 	}
 
 	private MessageHeaderAccessor mutableHeaderAccessor(Message<?> message) {
-		MessageHeaderAccessor headers = MessageHeaderAccessor.getMutableAccessor(getMessage(message));
+		MessageHeaderAccessor headers = MessageHeaderAccessor.getMutableAccessor(message);
 		headers.setLeaveMutable(true);
 		return headers;
 	}

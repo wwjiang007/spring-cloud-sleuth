@@ -37,7 +37,6 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.cloud.sleuth.DefaultSpanNamer;
 import org.springframework.cloud.sleuth.SpanAdjuster;
 import org.springframework.cloud.sleuth.SpanNamer;
-import org.springframework.cloud.sleuth.TraceKeys;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import zipkin2.Span;
@@ -53,8 +52,10 @@ import zipkin2.reporter.Reporter;
  */
 @Configuration
 @ConditionalOnProperty(value="spring.sleuth.enabled", matchIfMissing=true)
-@EnableConfigurationProperties({ TraceKeys.class, SleuthProperties.class })
+@EnableConfigurationProperties(SleuthProperties.class)
 public class TraceAutoConfiguration {
+
+	public static final String TRACER_BEAN_NAME = "tracer";
 
 	@Autowired(required = false) List<SpanAdjuster> spanAdjusters = new ArrayList<>();
 
@@ -91,9 +92,8 @@ public class TraceAutoConfiguration {
 		};
 	}
 
-	@Bean
+	@Bean(name = TRACER_BEAN_NAME)
 	@ConditionalOnMissingBean
-	// NOTE: stable bean name as might be used outside sleuth
 	Tracer tracer(Tracing tracing) {
 		return tracing.tracer();
 	}
