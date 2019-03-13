@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.cloud.sleuth.annotation;
 import brave.Tracing;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -26,16 +27,19 @@ import org.springframework.test.context.junit4.SpringRunner;
 import static org.assertj.core.api.Assertions.assertThat;
 
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = SleuthAnnotationAutoConfiguration.class,
-		properties = "spring.sleuth.enabled=false")
+@SpringBootTest(classes = SleuthAnnotationAutoConfiguration.class, properties = "spring.sleuth.enabled=false")
 public class SleuthNewSpanParserAnnotationNoSleuthTests {
 
-	@Autowired(required = false) NewSpanParser newSpanParser;
-	@Autowired(required = false) Tracing tracing;
+	@Autowired(required = false)
+	NewSpanParser newSpanParser;
+
+	@Autowired(required = false)
+	Tracing tracing;
 
 	@Test
 	public void shouldNotAutowireBecauseConfigIsDisabled() {
 		assertThat(this.newSpanParser).isNull();
 		assertThat(this.tracing).isNull();
 	}
+
 }

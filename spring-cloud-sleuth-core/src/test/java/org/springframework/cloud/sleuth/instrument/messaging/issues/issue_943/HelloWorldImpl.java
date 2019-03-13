@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,29 +24,28 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class HelloWorldImpl {
-	
+
 	private static final Logger LOG = LoggerFactory.getLogger(HelloWorldImpl.class);
 
 	public String invokeProcessor(String message) throws InterruptedException {
-		LOG.info(" input message "+message);
+		LOG.info(" input message " + message);
 		Thread.currentThread().sleep(500);
-		LOG.info(" After the Sleep "+message);
+		LOG.info(" After the Sleep " + message);
 		String responseMessage = message + " Persist into DB ";
 		return responseMessage;
 	}
-	
-	
+
 	public List<String> aggregate(List<String> requestMessage) {
 		LOG.info(Thread.currentThread().getName());
-		LOG.info(" requestMessage aggregate "+requestMessage);
+		LOG.info(" requestMessage aggregate " + requestMessage);
 		return requestMessage;
 	}
-	
-	
-	public List<String> splitMessage(String[] splitRequest){
-		LOG.info(" Inside splitMessage " +splitRequest);
+
+	public List<String> splitMessage(String[] splitRequest) {
+		LOG.info(" Inside splitMessage " + splitRequest);
 		List<String> splitGBSResponse = new ArrayList<String>();
 		splitGBSResponse = Arrays.asList(splitRequest);
 		return splitGBSResponse;
 	}
+
 }

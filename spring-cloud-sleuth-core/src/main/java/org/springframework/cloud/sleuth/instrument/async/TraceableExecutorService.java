@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.cloud.sleuth.instrument.async;
 
 import java.util.ArrayList;
@@ -26,27 +27,35 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import brave.Tracing;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.cloud.sleuth.SpanNamer;
 
 /**
- * A decorator class for {@link ExecutorService} to support tracing in Executors
+ * A decorator class for {@link ExecutorService} to support tracing in Executors.
  *
  * @author Gaurav Rai Mazra
  * @since 1.0.0
  */
 public class TraceableExecutorService implements ExecutorService {
+
 	final ExecutorService delegate;
+
 	private final String spanName;
+
 	Tracing tracing;
+
 	SpanNamer spanNamer;
+
 	BeanFactory beanFactory;
 
-	public TraceableExecutorService(BeanFactory beanFactory, final ExecutorService delegate) {
+	public TraceableExecutorService(BeanFactory beanFactory,
+			final ExecutorService delegate) {
 		this(beanFactory, delegate, null);
 	}
 
-	public TraceableExecutorService(BeanFactory beanFactory, final ExecutorService delegate, String spanName) {
+	public TraceableExecutorService(BeanFactory beanFactory,
+			final ExecutorService delegate, String spanName) {
 		this.delegate = delegate;
 		this.beanFactory = beanFactory;
 		this.spanName = spanName;
@@ -54,8 +63,8 @@ public class TraceableExecutorService implements ExecutorService {
 
 	@Override
 	public void execute(Runnable command) {
-		final Runnable r = new TraceRunnable(tracing(), spanNamer(), command, this.spanName);
-		this.delegate.execute(r);
+		this.delegate.submit(ContextUtil.isContextInCreation(this.beanFactory) ? command
+				: new TraceRunnable(tracing(), spanNamer(), command, this.spanName));
 	}
 
 	@Override
@@ -79,51 +88,63 @@ public class TraceableExecutorService implements ExecutorService {
 	}
 
 	@Override
-	public boolean awaitTermination(long timeout, TimeUnit unit) throws InterruptedException {
+	public boolean awaitTermination(long timeout, TimeUnit unit)
+			throws InterruptedException {
 		return this.delegate.awaitTermination(timeout, unit);
 	}
 
 	@Override
 	public <T> Future<T> submit(Callable<T> task) {
-		Callable<T> c = new TraceCallable<>(tracing(), spanNamer(), task, this.spanName);
-		return this.delegate.submit(c);
+		return this.delegate.submit(ContextUtil.isContextInCreation(this.beanFactory)
+				? task
+				: new TraceCallable<>(tracing(), spanNamer(), task, this.spanName));
 	}
 
 	@Override
 	public <T> Future<T> submit(Runnable task, T result) {
-		Runnable r = new TraceRunnable(tracing(), spanNamer(), task, this.spanName);
-		return this.delegate.submit(r, result);
+		return this.delegate.submit(
+				ContextUtil.isContextInCreation(this.beanFactory) ? task
+						: new TraceRunnable(tracing(), spanNamer(), task, this.spanName),
+				result);
 	}
 
 	@Override
 	public Future<?> submit(Runnable task) {
-		Runnable r = new TraceRunnable(tracing(), spanNamer(), task, this.spanName);
-		return this.delegate.submit(r);
+		return this.delegate.submit(ContextUtil.isContextInCreation(this.beanFactory)
+				? task : new TraceRunnable(tracing(), spanNamer(), task, this.spanName));
 	}
 
 	@Override
-	public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks) throws InterruptedException {
-		return this.delegate.invokeAll(wrapCallableCollection(tasks));
-	}
-
-	@Override
-	public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+	public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks)
 			throws InterruptedException {
-		return this.delegate.invokeAll(wrapCallableCollection(tasks), timeout, unit);
+		return this.delegate.invokeAll(ContextUtil.isContextInCreation(this.beanFactory)
+				? tasks : wrapCallableCollection(tasks));
 	}
 
 	@Override
-	public <T> T invokeAny(Collection<? extends Callable<T>> tasks) throws InterruptedException, ExecutionException {
-		return this.delegate.invokeAny(wrapCallableCollection(tasks));
+	public <T> List<Future<T>> invokeAll(Collection<? extends Callable<T>> tasks,
+			long timeout, TimeUnit unit) throws InterruptedException {
+		return this.delegate.invokeAll(ContextUtil.isContextInCreation(this.beanFactory)
+				? tasks : wrapCallableCollection(tasks), timeout, unit);
 	}
 
 	@Override
-	public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout, TimeUnit unit)
+	public <T> T invokeAny(Collection<? extends Callable<T>> tasks)
+			throws InterruptedException, ExecutionException {
+		return this.delegate.invokeAny(ContextUtil.isContextInCreation(this.beanFactory)
+				? tasks : wrapCallableCollection(tasks));
+	}
+
+	@Override
+	public <T> T invokeAny(Collection<? extends Callable<T>> tasks, long timeout,
+			TimeUnit unit)
 			throws InterruptedException, ExecutionException, TimeoutException {
-		return this.delegate.invokeAny(wrapCallableCollection(tasks), timeout, unit);
+		return this.delegate.invokeAny(ContextUtil.isContextInCreation(this.beanFactory)
+				? tasks : wrapCallableCollection(tasks), timeout, unit);
 	}
 
-	private <T> Collection<? extends Callable<T>> wrapCallableCollection(Collection<? extends Callable<T>> tasks) {
+	private <T> Collection<? extends Callable<T>> wrapCallableCollection(
+			Collection<? extends Callable<T>> tasks) {
 		List<Callable<T>> ts = new ArrayList<>();
 		for (Callable<T> task : tasks) {
 			if (!(task instanceof TraceCallable)) {
@@ -146,4 +167,5 @@ public class TraceableExecutorService implements ExecutorService {
 		}
 		return this.spanNamer;
 	}
+
 }

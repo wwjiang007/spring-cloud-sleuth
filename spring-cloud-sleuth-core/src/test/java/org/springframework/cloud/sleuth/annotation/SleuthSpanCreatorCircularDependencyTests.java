@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,12 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.cloud.sleuth.annotation;
 
-import zipkin2.Span;
-import zipkin2.reporter.Reporter;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import zipkin2.Span;
+import zipkin2.reporter.Reporter;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,35 +32,52 @@ import org.springframework.test.context.junit4.SpringRunner;
 @SpringBootTest(classes = SleuthSpanCreatorCircularDependencyTests.TestConfiguration.class)
 @RunWith(SpringRunner.class)
 public class SleuthSpanCreatorCircularDependencyTests {
-	@Test public void contextLoads() throws Exception {
+
+	@Test
+	public void contextLoads() throws Exception {
 	}
 
 	private static class Service1 {
-		@Autowired private Service2 service2;
 
-		@NewSpan public void foo() {
+		@Autowired
+		private Service2 service2;
+
+		@NewSpan
+		public void foo() {
 		}
+
 	}
 
 	private static class Service2 {
-		@Autowired private Service1 service1;
 
-		@NewSpan public void bar() {
+		@Autowired
+		private Service1 service1;
+
+		@NewSpan
+		public void bar() {
 		}
+
 	}
 
-	@Configuration @EnableAutoConfiguration
+	@Configuration
+	@EnableAutoConfiguration
 	protected static class TestConfiguration {
-		@Bean Reporter<Span> spanReporter() {
+
+		@Bean
+		Reporter<Span> spanReporter() {
 			return new ArrayListSpanReporter();
 		}
 
-		@Bean public Service1 service1() {
+		@Bean
+		public Service1 service1() {
 			return new Service1();
 		}
 
-		@Bean public Service2 service2() {
+		@Bean
+		public Service2 service2() {
 			return new Service2();
 		}
+
 	}
+
 }

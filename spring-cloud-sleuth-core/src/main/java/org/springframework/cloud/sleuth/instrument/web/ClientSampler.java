@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,20 +26,24 @@ import java.lang.annotation.Target;
 import org.springframework.beans.factory.annotation.Qualifier;
 
 /**
- * Annotate a client {@link brave.http.HttpSampler} that hsould be
- * injected to {@link brave.http.HttpTracing}
+ * Annotate a client {@link brave.http.HttpSampler} that hsould be injected to
+ * {@link brave.http.HttpTracing}.
  *
  * @author Marcin Grzejszczak
  * @since 2.0.0
  * @see Qualifier
  */
-@Target({ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER, ElementType.TYPE, ElementType.ANNOTATION_TYPE})
+@Target({ ElementType.FIELD, ElementType.METHOD, ElementType.PARAMETER, ElementType.TYPE,
+		ElementType.ANNOTATION_TYPE })
 @Retention(RetentionPolicy.RUNTIME)
 @Inherited
 @Documented
 @Qualifier(ClientSampler.NAME)
 public @interface ClientSampler {
 
+	/**
+	 * Default name for Sleuth client sampler.
+	 */
 	String NAME = "sleuthClientSampler";
 
 }

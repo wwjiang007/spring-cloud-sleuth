@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,15 +23,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import brave.sampler.Sampler;
 
 /**
- * This sampler is appropriate for low-traffic instrumentation (ex servers that each receive <100K
- * requests), or those who do not provision random trace ids. It not appropriate for collectors as
- * the sampling decision isn't idempotent (consistent based on trace id).
+ * This sampler is appropriate for low-traffic instrumentation (ex servers that each
+ * receive <100K requests), or those who do not provision random trace ids. It not
+ * appropriate for collectors as the sampling decision isn't idempotent (consistent based
+ * on trace id).
  *
  * <h3>Implementation</h3>
  *
- * <p>Taken from <a href="https://github.com/openzipkin/zipkin-java/blob/traceid-sampler/zipkin/src/main/java/zipkin/CountingTraceIdSampler.java">Zipkin project</a></p>
+ * <p>
+ * Taken from <a href= "https://github.com/openzipkin/zipkin-java/blob/traceid-sampler/
+ * zipkin/src/main/java/zipkin/CountingTraceIdSampler.java">Zipkin project</a>
+ * </p>
  *
- * <p>This counts to see how many out of 100 traces should be retained. This means that it is
+ * <p>
+ * This counts to see how many out of 100 traces should be retained. This means that it is
  * accurate in units of 100 traces.
  *
  * @author Marcin Grzejszczak
@@ -41,7 +46,9 @@ import brave.sampler.Sampler;
 public class ProbabilityBasedSampler extends Sampler {
 
 	private final AtomicInteger counter = new AtomicInteger(0);
+
 	private final BitSet sampleDecisions;
+
 	private final SamplerProperties configuration;
 
 	public ProbabilityBasedSampler(SamplerProperties configuration) {
@@ -50,27 +57,14 @@ public class ProbabilityBasedSampler extends Sampler {
 		this.configuration = configuration;
 	}
 
-	@Override
-	public boolean isSampled(long traceId) {
-		if (this.configuration.getProbability() == 0) {
-			return false;
-		} else if (this.configuration.getProbability() == 1.0f) {
-			return true;
-		}
-		synchronized (this) {
-			final int i = this.counter.getAndIncrement();
-			boolean result = this.sampleDecisions.get(i);
-			if (i == 99) {
-				this.counter.set(0);
-			}
-			return result;
-		}
-	}
-
 	/**
 	 * Reservoir sampling algorithm borrowed from Stack Overflow.
 	 *
 	 * http://stackoverflow.com/questions/12817946/generate-a-random-bitset-with-n-1s
+	 * @param size size of the bit set
+	 * @param cardinality cardinality of the bit set
+	 * @param rnd random generator
+	 * @return a random bitset
 	 */
 	static BitSet randomBitSet(int size, int cardinality, Random rnd) {
 		BitSet result = new BitSet(size);
@@ -90,4 +84,23 @@ public class ProbabilityBasedSampler extends Sampler {
 		}
 		return result;
 	}
+
+	@Override
+	public boolean isSampled(long traceId) {
+		if (this.configuration.getProbability() == 0) {
+			return false;
+		}
+		else if (this.configuration.getProbability() == 1.0f) {
+			return true;
+		}
+		synchronized (this) {
+			final int i = this.counter.getAndIncrement();
+			boolean result = this.sampleDecisions.get(i);
+			if (i == 99) {
+				this.counter.set(0);
+			}
+			return result;
+		}
+	}
+
 }

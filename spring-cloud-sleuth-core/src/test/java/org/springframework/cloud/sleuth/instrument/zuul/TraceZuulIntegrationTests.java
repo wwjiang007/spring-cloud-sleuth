@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
 package org.springframework.cloud.sleuth.instrument.zuul;
 
 import java.io.IOException;
-import java.lang.invoke.MethodHandles;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -26,6 +25,8 @@ import brave.Span;
 import brave.Tracer;
 import brave.Tracing;
 import brave.sampler.Sampler;
+import com.netflix.loadbalancer.Server;
+import com.netflix.loadbalancer.ServerList;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.assertj.core.api.BDDAssertions;
@@ -33,12 +34,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.SpringBootTest.WebEnvironment;
-import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.cloud.client.discovery.DiscoveryClient;
 import org.springframework.cloud.netflix.ribbon.RibbonClient;
 import org.springframework.cloud.netflix.ribbon.StaticServerList;
@@ -46,6 +47,7 @@ import org.springframework.cloud.netflix.zuul.EnableZuulProxy;
 import org.springframework.cloud.netflix.zuul.filters.RouteLocator;
 import org.springframework.cloud.netflix.zuul.filters.ZuulProperties;
 import org.springframework.cloud.netflix.zuul.filters.discovery.DiscoveryClientRouteLocator;
+import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpEntity;
@@ -61,9 +63,6 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.DefaultResponseErrorHandler;
 import org.springframework.web.client.RestTemplate;
 
-import com.netflix.loadbalancer.Server;
-import com.netflix.loadbalancer.ServerList;
-
 import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -75,16 +74,19 @@ import static org.assertj.core.api.BDDAssertions.then;
 @DirtiesContext
 public class TraceZuulIntegrationTests {
 
-	private static final Log log = LogFactory.getLog(MethodHandles.lookup().lookupClass());
+	private static final Log log = LogFactory.getLog(TraceZuulIntegrationTests.class);
+
+	@Autowired
+	Tracing tracing;
+
+	@Autowired
+	ArrayListSpanReporter spanAccumulator;
+
+	@Autowired
+	RestTemplate restTemplate;
 
 	@Value("${local.server.port}")
 	private int port;
-	@Autowired
-	Tracing tracing;
-	@Autowired
-	ArrayListSpanReporter spanAccumulator;
-	@Autowired
-	RestTemplate restTemplate;
 
 	@Before
 	@After
@@ -103,10 +105,12 @@ public class TraceZuulIntegrationTests {
 
 			then(result.getStatusCode()).isEqualTo(HttpStatus.OK);
 			then(result.getBody()).isEqualTo("Hello world");
-		} catch (Exception e) {
+		}
+		catch (Exception e) {
 			log.error(e);
 			throw e;
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
@@ -127,7 +131,8 @@ public class TraceZuulIntegrationTests {
 					HttpMethod.GET, new HttpEntity<>((Void) null), String.class);
 
 			then(result.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
@@ -140,8 +145,7 @@ public class TraceZuulIntegrationTests {
 
 	void everySpanHasTheSameTraceId(List<zipkin2.Span> actual) {
 		BDDAssertions.assertThat(actual).isNotNull();
-		List<String> traceIds = actual.stream()
-				.map(zipkin2.Span::traceId).distinct()
+		List<String> traceIds = actual.stream().map(zipkin2.Span::traceId).distinct()
 				.collect(toList());
 		log.info("Stored traceids " + traceIds);
 		assertThat(traceIds).hasSize(1);
@@ -151,16 +155,15 @@ public class TraceZuulIntegrationTests {
 		BDDAssertions.assertThat(actual).isNotNull();
 		List<String> parentSpanIds = actual.stream().map(zipkin2.Span::parentId)
 				.filter(Objects::nonNull).collect(toList());
-		List<String> spanIds = actual.stream()
-				.map(zipkin2.Span::id).distinct()
+		List<String> spanIds = actual.stream().map(zipkin2.Span::id).distinct()
 				.collect(toList());
 		List<String> difference = new ArrayList<>(parentSpanIds);
 		difference.removeAll(spanIds);
-		log.info("Difference between parent ids and span ids " +
-				difference.stream().map(span -> "id as hex [" + span + "]").collect(
-						joining("\n")));
+		log.info("Difference between parent ids and span ids " + difference.stream()
+				.map(span -> "id as hex [" + span + "]").collect(joining("\n")));
 		assertThat(spanIds).containsAll(parentSpanIds);
 	}
+
 }
 
 // Don't use @SpringBootApplication because we don't want to component scan
@@ -210,14 +213,16 @@ class SampleZuulProxyApplication {
 	Sampler alwaysSampler() {
 		return Sampler.ALWAYS_SAMPLE;
 	}
+
 }
 
 class MyRouteLocator extends DiscoveryClientRouteLocator {
 
-	public MyRouteLocator(String servletPath, DiscoveryClient discovery,
+	MyRouteLocator(String servletPath, DiscoveryClient discovery,
 			ZuulProperties properties) {
 		super(servletPath, discovery, properties);
 	}
+
 }
 
 // Load balancer with fixed server list for "simple" pointing to localhost
@@ -231,4 +236,5 @@ class SimpleRibbonClientConfiguration {
 	public ServerList<Server> ribbonServerList() {
 		return new StaticServerList<>(new Server("localhost", this.port));
 	}
+
 }

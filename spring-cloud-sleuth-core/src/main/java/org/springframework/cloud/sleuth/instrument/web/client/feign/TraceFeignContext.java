@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,8 +22,8 @@ import java.util.Map;
 import org.springframework.cloud.openfeign.FeignContext;
 
 /**
- * Custom FeignContext that wraps beans in custom Feign configurations in their
- * tracing representations.
+ * Custom FeignContext that wraps beans in custom Feign configurations in their tracing
+ * representations.
  *
  * @author Marcin Grzejszczak
  * @since 1.0.1
@@ -31,6 +31,7 @@ import org.springframework.cloud.openfeign.FeignContext;
 class TraceFeignContext extends FeignContext {
 
 	private final TraceFeignObjectWrapper traceFeignObjectWrapper;
+
 	private final FeignContext delegate;
 
 	TraceFeignContext(TraceFeignObjectWrapper traceFeignObjectWrapper,
@@ -55,7 +56,8 @@ class TraceFeignContext extends FeignContext {
 		}
 		Map<String, T> convertedInstances = new HashMap<>();
 		for (Map.Entry<String, T> entry : instances.entrySet()) {
-			convertedInstances.put(entry.getKey(), (T) this.traceFeignObjectWrapper.wrap(entry.getValue()));
+			convertedInstances.put(entry.getKey(),
+					(T) this.traceFeignObjectWrapper.wrap(entry.getValue()));
 		}
 		return convertedInstances;
 	}

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -35,6 +35,7 @@ import com.netflix.hystrix.strategy.properties.HystrixPropertiesStrategy;
 import com.netflix.hystrix.strategy.properties.HystrixProperty;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.cloud.sleuth.SpanNamer;
 import org.springframework.cloud.sleuth.instrument.async.TraceCallable;
 
@@ -49,11 +50,14 @@ import org.springframework.cloud.sleuth.instrument.async.TraceCallable;
 public class SleuthHystrixConcurrencyStrategy extends HystrixConcurrencyStrategy {
 
 	private static final String HYSTRIX_COMPONENT = "hystrix";
+
 	private static final Log log = LogFactory
 			.getLog(SleuthHystrixConcurrencyStrategy.class);
 
 	private final Tracing tracing;
+
 	private final SpanNamer spanNamer;
+
 	private HystrixConcurrencyStrategy delegate;
 
 	public SleuthHystrixConcurrencyStrategy(Tracing tracing, SpanNamer spanNamer) {
@@ -83,8 +87,8 @@ public class SleuthHystrixConcurrencyStrategy extends HystrixConcurrencyStrategy
 			HystrixPlugins.getInstance().registerMetricsPublisher(metricsPublisher);
 			HystrixPlugins.getInstance().registerPropertiesStrategy(propertiesStrategy);
 		}
-		catch (Exception e) {
-			log.error("Failed to register Sleuth Hystrix Concurrency Strategy", e);
+		catch (Exception ex) {
+			log.error("Failed to register Sleuth Hystrix Concurrency Strategy", ex);
 		}
 	}
 
@@ -92,10 +96,10 @@ public class SleuthHystrixConcurrencyStrategy extends HystrixConcurrencyStrategy
 			HystrixMetricsPublisher metricsPublisher,
 			HystrixPropertiesStrategy propertiesStrategy) {
 		if (log.isDebugEnabled()) {
-			log.debug("Current Hystrix plugins configuration is [" + "concurrencyStrategy ["
-					+ this.delegate + "]," + "eventNotifier [" + eventNotifier + "],"
-					+ "metricPublisher [" + metricsPublisher + "]," + "propertiesStrategy ["
-					+ propertiesStrategy + "]," + "]");
+			log.debug("Current Hystrix plugins configuration is ["
+					+ "concurrencyStrategy [" + this.delegate + "]," + "eventNotifier ["
+					+ eventNotifier + "]," + "metricPublisher [" + metricsPublisher + "],"
+					+ "propertiesStrategy [" + propertiesStrategy + "]," + "]");
 			log.debug("Registering Sleuth Hystrix Concurrency Strategy.");
 		}
 	}
@@ -110,8 +114,8 @@ public class SleuthHystrixConcurrencyStrategy extends HystrixConcurrencyStrategy
 		if (wrappedCallable instanceof TraceCallable) {
 			return wrappedCallable;
 		}
-		return new TraceCallable<>(this.tracing, this.spanNamer,
-				wrappedCallable, HYSTRIX_COMPONENT);
+		return new TraceCallable<>(this.tracing, this.spanNamer, wrappedCallable,
+				HYSTRIX_COMPONENT);
 	}
 
 	@Override
@@ -140,4 +144,5 @@ public class SleuthHystrixConcurrencyStrategy extends HystrixConcurrencyStrategy
 			HystrixRequestVariableLifecycle<T> rv) {
 		return this.delegate.getRequestVariable(rv);
 	}
+
 }

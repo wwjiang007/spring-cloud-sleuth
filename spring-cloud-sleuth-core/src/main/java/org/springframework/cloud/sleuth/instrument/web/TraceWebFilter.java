@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,13 @@ import brave.propagation.TraceContext;
 import brave.propagation.TraceContextOrSamplingFlags;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+import org.reactivestreams.Subscription;
+import reactor.core.CoreSubscriber;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.MonoOperator;
+import reactor.util.annotation.Nullable;
+import reactor.util.context.Context;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.core.Ordered;
 import org.springframework.http.HttpHeaders;
@@ -36,66 +43,71 @@ import org.springframework.web.reactive.HandlerMapping;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.WebFilter;
 import org.springframework.web.server.WebFilterChain;
-import reactor.core.publisher.Mono;
-import reactor.util.context.Context;
 
 /**
- * A {@link WebFilter} that creates / continues / closes and detaches spans
- * for a reactive web application.
+ * A {@link WebFilter} that creates / continues / closes and detaches spans for a reactive
+ * web application.
  *
  * @author Marcin Grzejszczak
  * @since 2.0.0
  */
 public final class TraceWebFilter implements WebFilter, Ordered {
 
-	private static final Log log = LogFactory.getLog(TraceWebFilter.class);
-	private static final String STATUS_CODE_KEY = "http.status_code";
-	static final String MVC_CONTROLLER_CLASS_KEY = "mvc.controller.class";
-	static final String MVC_CONTROLLER_METHOD_KEY = "mvc.controller.method";
-
-	protected static final String TRACE_REQUEST_ATTR = TraceWebFilter.class.getName()
-			+ ".TRACE";
-	private static final String TRACE_SPAN_WITHOUT_PARENT = TraceWebFilter.class.getName()
-			+ ".SPAN_WITH_NO_PARENT";
-
 	/**
 	 * If you register your filter before the {@link TraceWebFilter} then you will not
 	 * have the tracing context passed for you out of the box. That means that e.g. your
 	 * logs will not get correlated.
 	 */
-	public static final int ORDER = Ordered.HIGHEST_PRECEDENCE + 5;
+	public static final int ORDER = TraceHttpAutoConfiguration.TRACING_FILTER_ORDER;
 
-	static final Propagation.Getter<HttpHeaders, String> GETTER =
-			new Propagation.Getter<HttpHeaders, String>() {
+	protected static final String TRACE_REQUEST_ATTR = TraceWebFilter.class.getName()
+			+ ".TRACE";
+	static final String MVC_CONTROLLER_CLASS_KEY = "mvc.controller.class";
+	static final String MVC_CONTROLLER_METHOD_KEY = "mvc.controller.method";
+	static final Propagation.Getter<HttpHeaders, String> GETTER = new Propagation.Getter<HttpHeaders, String>() {
 
-				@Override public String get(HttpHeaders carrier, String key) {
-					return carrier.getFirst(key);
-				}
+		@Override
+		public String get(HttpHeaders carrier, String key) {
+			return carrier.getFirst(key);
+		}
 
-				@Override public String toString() {
-					return "HttpHeaders::getFirst";
-				}
-			};
+		@Override
+		public String toString() {
+			return "HttpHeaders::getFirst";
+		}
+	};
 
-	public static WebFilter create(BeanFactory beanFactory) {
-		return new TraceWebFilter(beanFactory);
-	}
+	private static final Log log = LogFactory.getLog(TraceWebFilter.class);
+
+	private static final String STATUS_CODE_KEY = "http.status_code";
+
+	private static final String TRACE_SPAN_WITHOUT_PARENT = TraceWebFilter.class.getName()
+			+ ".SPAN_WITH_NO_PARENT";
+
+	private final BeanFactory beanFactory;
 
 	Tracer tracer;
+
 	HttpServerHandler<ServerHttpRequest, ServerHttpResponse> handler;
+
 	TraceContext.Extractor<HttpHeaders> extractor;
-	private final BeanFactory beanFactory;
+
+	SleuthWebProperties webProperties;
 
 	TraceWebFilter(BeanFactory beanFactory) {
 		this.beanFactory = beanFactory;
 	}
 
+	public static WebFilter create(BeanFactory beanFactory) {
+		return new TraceWebFilter(beanFactory);
+	}
+
 	@SuppressWarnings("unchecked")
 	HttpServerHandler<ServerHttpRequest, ServerHttpResponse> handler() {
 		if (this.handler == null) {
-			this.handler = HttpServerHandler
-					.create(this.beanFactory.getBean(HttpTracing.class),
-							new TraceWebFilter.HttpAdapter());
+			this.handler = HttpServerHandler.create(
+					this.beanFactory.getBean(HttpTracing.class),
+					new TraceWebFilter.HttpAdapter());
 		}
 		return this.handler;
 	}
@@ -109,13 +121,21 @@ public final class TraceWebFilter implements WebFilter, Ordered {
 
 	TraceContext.Extractor<HttpHeaders> extractor() {
 		if (this.extractor == null) {
-			this.extractor = this.beanFactory.getBean(HttpTracing.class)
-					.tracing().propagation().extractor(GETTER);
+			this.extractor = this.beanFactory.getBean(HttpTracing.class).tracing()
+					.propagation().extractor(GETTER);
 		}
 		return this.extractor;
 	}
 
-	@Override public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
+	SleuthWebProperties sleuthWebProperties() {
+		if (this.webProperties == null) {
+			this.webProperties = this.beanFactory.getBean(SleuthWebProperties.class);
+		}
+		return this.webProperties;
+	}
+
+	@Override
+	public Mono<Void> filter(ServerWebExchange exchange, WebFilterChain chain) {
 		if (tracer().currentSpan() != null) {
 			// clear any previous trace
 			tracer().withSpanInScope(null);
@@ -124,181 +144,244 @@ public final class TraceWebFilter implements WebFilter, Ordered {
 		if (log.isDebugEnabled()) {
 			log.debug("Received a request to uri [" + uri + "]");
 		}
-		Span spanFromAttribute = getSpanFromAttribute(exchange);
-		final String CONTEXT_ERROR = "sleuth.webfilter.context.error";
-		return chain
-				.filter(exchange)
-				.compose(f -> f.then(Mono.subscriberContext())
-						.onErrorResume(t -> Mono.subscriberContext()
-								.map(c -> c.put(CONTEXT_ERROR, t)))
-						.flatMap(c -> {
-							//reactivate span from context
-							Span span = spanFromContext(c);
-							Mono<Void> continuation;
-							Throwable t = null;
-							if (c.hasKey(CONTEXT_ERROR)) {
-								t = c.get(CONTEXT_ERROR);
-								continuation = Mono.error(t);
-							} else {
-								continuation = Mono.empty();
-							}
-							String httpRoute = null;
-							Object attribute = exchange
-									.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
-							if (attribute instanceof HandlerMethod) {
-								HandlerMethod handlerMethod = (HandlerMethod) attribute;
-								addClassMethodTag(handlerMethod, span);
-								addClassNameTag(handlerMethod, span);
-								Object pattern = exchange
-										.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
-								httpRoute = pattern != null ? pattern.toString() : "";
-							}
-							addResponseTagsForSpanWithoutParent(exchange, exchange.getResponse(), span);
-							DecoratedServerHttpResponse delegate = new DecoratedServerHttpResponse(
-									exchange.getResponse(), exchange.getRequest().getMethodValue(),
-									httpRoute);
-							handler().handleSend(delegate, t, span);
-							if (log.isDebugEnabled()) {
-								log.debug("Handled send of " + span);
-							}
-							return continuation;
-						})
-						.subscriberContext(c -> {
-							Span span;
-							if (c.hasKey(Span.class)) {
-								Span parent = c.get(Span.class);
-								span = tracer()
-										.nextSpan(TraceContextOrSamplingFlags.create(parent.context()))
-										.start();
-								if (log.isDebugEnabled()) {
-									log.debug("Found span in reactor context" + span);
-								}
-							} else {
-								if (spanFromAttribute != null) {
-									span = spanFromAttribute;
-									if (log.isDebugEnabled()) {
-										log.debug("Found span in attribute " + span);
-									}
-								} else {
-									span = handler().handleReceive(extractor(),
-											exchange.getRequest().getHeaders(), exchange.getRequest());
-									if (log.isDebugEnabled()) {
-										log.debug("Handled receive of span " + span);
-									}
-								}
-								exchange.getAttributes().put(TRACE_REQUEST_ATTR, span);
-							}
-							return c.put(Span.class, span);
-						}));
+		return new MonoWebFilterTrace(chain.filter(exchange), exchange, this);
 	}
 
-	private Span spanFromContext(Context c) {
-		if (c.hasKey(Span.class)) {
-			Span span = c.get(Span.class);
-			if (log.isDebugEnabled()) {
-				log.debug("Found span in context " + span);
+	@Override
+	public int getOrder() {
+		return sleuthWebProperties().getFilterOrder();
+	}
+
+	private static class MonoWebFilterTrace extends MonoOperator<Void, Void> {
+
+		final ServerWebExchange exchange;
+
+		final Tracer tracer;
+
+		final Span attrSpan;
+
+		final HttpServerHandler<ServerHttpRequest, ServerHttpResponse> handler;
+
+		final TraceContext.Extractor<HttpHeaders> extractor;
+
+		MonoWebFilterTrace(Mono<? extends Void> source, ServerWebExchange exchange,
+				TraceWebFilter parent) {
+			super(source);
+			this.tracer = parent.tracer();
+			this.extractor = parent.extractor();
+			this.handler = parent.handler();
+			this.exchange = exchange;
+			this.attrSpan = exchange.getAttribute(TRACE_REQUEST_ATTR);
+		}
+
+		@Override
+		public void subscribe(CoreSubscriber<? super Void> subscriber) {
+			Context context = subscriber.currentContext();
+			this.source.subscribe(new WebFilterTraceSubscriber(subscriber, context,
+					findOrCreateSpan(context), this));
+		}
+
+		private Span findOrCreateSpan(Context c) {
+			Span span;
+			if (c.hasKey(Span.class)) {
+				Span parent = c.get(Span.class);
+				span = this.tracer
+						.nextSpan(TraceContextOrSamplingFlags.create(parent.context()))
+						.start();
+				if (log.isDebugEnabled()) {
+					log.debug("Found span in reactor context" + span);
+				}
+			}
+			else {
+				if (this.attrSpan != null) {
+					span = this.attrSpan;
+					if (log.isDebugEnabled()) {
+						log.debug("Found span in attribute " + span);
+					}
+				}
+				else {
+					span = this.handler.handleReceive(this.extractor,
+							this.exchange.getRequest().getHeaders(),
+							this.exchange.getRequest());
+					if (log.isDebugEnabled()) {
+						log.debug("Handled receive of span " + span);
+					}
+				}
+				this.exchange.getAttributes().put(TRACE_REQUEST_ATTR, span);
 			}
 			return span;
 		}
-		Span span = defaultSpan();
-		if (log.isDebugEnabled()) {
-			log.debug("No span found in context. Creating a new one " + span);
-		}
-		return span;
-	}
 
-	private Span defaultSpan() {
-		return tracer().nextSpan().start();
-	}
+		static final class WebFilterTraceSubscriber implements CoreSubscriber<Void> {
 
-	private void addResponseTagsForSpanWithoutParent(ServerWebExchange exchange,
-			ServerHttpResponse response, Span span) {
-		if (spanWithoutParent(exchange) && response.getStatusCode() != null
-				&& span != null) {
-			span.tag(STATUS_CODE_KEY, String.valueOf(response.getStatusCode().value()));
-		}
-	}
+			final CoreSubscriber<? super Void> actual;
 
-	private Span getSpanFromAttribute(ServerWebExchange exchange) {
-		return exchange.getAttribute(TRACE_REQUEST_ATTR);
-	}
+			final Context context;
 
-	private boolean spanWithoutParent(ServerWebExchange exchange) {
-		return exchange.getAttribute(TRACE_SPAN_WITHOUT_PARENT) != null;
-	}
+			final Span span;
 
-	private void addClassMethodTag(Object handler, Span span) {
-		if (handler instanceof HandlerMethod) {
-			String methodName = ((HandlerMethod) handler).getMethod().getName();
-			span.tag(MVC_CONTROLLER_METHOD_KEY, methodName);
-			if (log.isDebugEnabled()) {
-				log.debug("Adding a method tag with value [" + methodName + "] to a span " + span);
+			final ServerWebExchange exchange;
+
+			final HttpServerHandler<ServerHttpRequest, ServerHttpResponse> handler;
+
+			WebFilterTraceSubscriber(CoreSubscriber<? super Void> actual, Context context,
+					Span span, MonoWebFilterTrace parent) {
+				this.actual = actual;
+				this.span = span;
+				this.context = context.put(Span.class, span);
+				this.exchange = parent.exchange;
+				this.handler = parent.handler;
 			}
-		}
-	}
 
-	private void addClassNameTag(Object handler, Span span) {
-		String className;
-		if (handler instanceof HandlerMethod) {
-			className = ((HandlerMethod) handler).getBeanType().getSimpleName();
-		} else {
-			className = handler.getClass().getSimpleName();
-		}
-		if (log.isDebugEnabled()) {
-			log.debug("Adding a class tag with value [" + className + "] to a span " + span);
-		}
-		span.tag(MVC_CONTROLLER_CLASS_KEY, className);
-	}
+			@Override
+			public void onSubscribe(Subscription subscription) {
+				this.actual.onSubscribe(subscription);
+			}
 
-	@Override public int getOrder() {
-		return ORDER;
+			@Override
+			public void onNext(Void aVoid) {
+				// IGNORE
+			}
+
+			@Override
+			public void onError(Throwable t) {
+				terminateSpan(t);
+				this.actual.onError(t);
+			}
+
+			@Override
+			public void onComplete() {
+				terminateSpan(null);
+				this.actual.onComplete();
+			}
+
+			@Override
+			public Context currentContext() {
+				return this.context;
+			}
+
+			private void terminateSpan(@Nullable Throwable t) {
+				String httpRoute = null;
+				Object attribute = this.exchange
+						.getAttribute(HandlerMapping.BEST_MATCHING_HANDLER_ATTRIBUTE);
+				if (attribute instanceof HandlerMethod) {
+					HandlerMethod handlerMethod = (HandlerMethod) attribute;
+					addClassMethodTag(handlerMethod, this.span);
+					addClassNameTag(handlerMethod, this.span);
+					Object pattern = this.exchange
+							.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+					httpRoute = pattern != null ? pattern.toString() : "";
+				}
+				addResponseTagsForSpanWithoutParent(this.exchange,
+						this.exchange.getResponse(), this.span);
+				DecoratedServerHttpResponse delegate = new DecoratedServerHttpResponse(
+						this.exchange.getResponse(),
+						this.exchange.getRequest().getMethodValue(), httpRoute);
+				this.handler.handleSend(delegate, t, this.span);
+				if (log.isDebugEnabled()) {
+					log.debug("Handled send of " + this.span);
+				}
+			}
+
+			private void addClassMethodTag(Object handler, Span span) {
+				if (handler instanceof HandlerMethod) {
+					String methodName = ((HandlerMethod) handler).getMethod().getName();
+					span.tag(MVC_CONTROLLER_METHOD_KEY, methodName);
+					if (log.isDebugEnabled()) {
+						log.debug("Adding a method tag with value [" + methodName
+								+ "] to a span " + span);
+					}
+				}
+			}
+
+			private void addClassNameTag(Object handler, Span span) {
+				String className;
+				if (handler instanceof HandlerMethod) {
+					className = ((HandlerMethod) handler).getBeanType().getSimpleName();
+				}
+				else {
+					className = handler.getClass().getSimpleName();
+				}
+				if (log.isDebugEnabled()) {
+					log.debug("Adding a class tag with value [" + className
+							+ "] to a span " + span);
+				}
+				span.tag(MVC_CONTROLLER_CLASS_KEY, className);
+			}
+
+			private void addResponseTagsForSpanWithoutParent(ServerWebExchange exchange,
+					ServerHttpResponse response, Span span) {
+				if (spanWithoutParent(exchange) && response.getStatusCode() != null
+						&& span != null) {
+					span.tag(STATUS_CODE_KEY,
+							String.valueOf(response.getStatusCode().value()));
+				}
+			}
+
+			private boolean spanWithoutParent(ServerWebExchange exchange) {
+				return exchange.getAttribute(TRACE_SPAN_WITHOUT_PARENT) != null;
+			}
+
+		}
+
 	}
 
 	static final class DecoratedServerHttpResponse extends ServerHttpResponseDecorator {
 
-		final String method, httpRoute;
+		final String method;
 
-		DecoratedServerHttpResponse(ServerHttpResponse delegate, String method, String httpRoute) {
+		final String httpRoute;
+
+		DecoratedServerHttpResponse(ServerHttpResponse delegate, String method,
+				String httpRoute) {
 			super(delegate);
 			this.method = method;
 			this.httpRoute = httpRoute;
 		}
+
 	}
 
 	static final class HttpAdapter
 			extends brave.http.HttpServerAdapter<ServerHttpRequest, ServerHttpResponse> {
 
-		@Override public String method(ServerHttpRequest request) {
+		@Override
+		public String method(ServerHttpRequest request) {
 			return request.getMethodValue();
 		}
 
-		@Override public String url(ServerHttpRequest request) {
+		@Override
+		public String url(ServerHttpRequest request) {
 			return request.getURI().toString();
 		}
 
-		@Override public String requestHeader(ServerHttpRequest request, String name) {
+		@Override
+		public String requestHeader(ServerHttpRequest request, String name) {
 			Object result = request.getHeaders().getFirst(name);
 			return result != null ? result.toString() : null;
 		}
 
-		@Override public Integer statusCode(ServerHttpResponse response) {
-			return response.getStatusCode() != null ?
-					response.getStatusCode().value() : null;
+		@Override
+		public Integer statusCode(ServerHttpResponse response) {
+			return response.getStatusCode() != null ? response.getStatusCode().value()
+					: null;
 		}
 
-		@Override public String methodFromResponse(ServerHttpResponse response) {
+		@Override
+		public String methodFromResponse(ServerHttpResponse response) {
 			if (response instanceof DecoratedServerHttpResponse) {
 				return ((DecoratedServerHttpResponse) response).method;
 			}
 			return null;
 		}
 
-		@Override public String route(ServerHttpResponse response) {
+		@Override
+		public String route(ServerHttpResponse response) {
 			if (response instanceof DecoratedServerHttpResponse) {
 				return ((DecoratedServerHttpResponse) response).httpRoute;
 			}
 			return null;
 		}
-	}
-}
 
+	}
+
+}

@@ -6,7 +6,7 @@
   ~ you may not use this file except in compliance with the License.
   ~ You may obtain a copy of the License at
   ~
-  ~      http://www.apache.org/licenses/LICENSE-2.0
+  ~      https://www.apache.org/licenses/LICENSE-2.0
   ~
   ~ Unless required by applicable law or agreed to in writing, software
   ~ distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,15 +14,15 @@
   ~ See the License for the specific language governing permissions and
   ~ limitations under the License.
   -->
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-		 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+		 xmlns="http://maven.apache.org/POM/4.0.0"
 		 xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
 	<modelVersion>4.0.0</modelVersion>
 
 	<name>Benchmarks</name>
 	<description>Benchmarks (JMH)</description>
 	<groupId>org.springframework.cloud</groupId>
-	<version>2.0.0.BUILD-SNAPSHOT</version>
+	<version>2.2.0.BUILD-SNAPSHOT</version>
 	<artifactId>benchmarks</artifactId>
 
 	<properties>
@@ -33,7 +33,8 @@
 		<sonar.skip>true</sonar.skip>
 		<maven.compiler.target>1.8</maven.compiler.target>
 		<maven.compiler.source>1.8</maven.compiler.source>
-		<spring-boot.version>2.0.0.RELEASE</spring-boot.version>
+		<spring-boot.version>2.1.3.RELEASE</spring-boot.version>
+		<brave.version>5.4.3</brave.version>
 	</properties>
 
 	<dependencyManagement>
@@ -64,6 +65,10 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-webflux</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -107,6 +112,21 @@
 			<artifactId>jmh-generator-annprocess</artifactId>
 			<version>${jmh.version}</version>
 			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>com.squareup.okhttp3</groupId>
+			<artifactId>okhttp</artifactId>
+			<version>3.11.0</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>io.zipkin.brave</groupId>
+			<artifactId>brave-instrumentation-httpclient</artifactId>
+			<version>${brave.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
 		</dependency>
 	</dependencies>
 
@@ -229,7 +249,8 @@
 											<mainClass>org.openjdk.jmh.Main</mainClass>
 										</transformer>
 									</transformers>
-									<createDependencyReducedPom>false</createDependencyReducedPom>
+									<createDependencyReducedPom>false
+									</createDependencyReducedPom>
 								</configuration>
 							</execution>
 						</executions>
@@ -261,7 +282,9 @@
 									<goal>start</goal>
 								</goals>
 								<configuration>
-									<jvmArguments>"-Dserver.port=9875" "-Dspring.sleuth.enabled=false"</jvmArguments>
+									<jvmArguments>"-Dserver.port=9875"
+										"-Dspring.sleuth.enabled=false"
+									</jvmArguments>
 									<jmxPort>8875</jmxPort>
 									<fork>true</fork>
 								</configuration>
@@ -324,7 +347,8 @@
 							<suppressJMeterOutput>false</suppressJMeterOutput>
 							<ignoreResultFailures>true</ignoreResultFailures>
 							<propertiesJMeter>
-								<jmeter.save.saveservice.thread_counts>true</jmeter.save.saveservice.thread_counts>
+								<jmeter.save.saveservice.thread_counts>true
+								</jmeter.save.saveservice.thread_counts>
 								<sampleresult.useNanoTime>true</sampleresult.useNanoTime>
 							</propertiesJMeter>
 							<jmeterPlugins>
@@ -404,7 +428,9 @@
 						<artifactId>jmeter-analysis-maven-plugin</artifactId>
 						<version>1.0.6</version>
 						<configuration>
-							<targetDirectory>${project.build.directory}/jmeter/results/analysis/</targetDirectory>
+							<targetDirectory>
+								${project.build.directory}/jmeter/results/analysis/
+							</targetDirectory>
 						</configuration>
 						<executions>
 							<execution>
@@ -414,7 +440,9 @@
 									<goal>analyze</goal>
 								</goals>
 								<configuration>
-									<source>${project.build.directory}/jmeter/results/AsyncHttpBenchmarks.jtl</source>
+									<source>
+										${project.build.directory}/jmeter/results/AsyncHttpBenchmarks.jtl
+									</source>
 								</configuration>
 							</execution>
 							<execution>
@@ -424,7 +452,9 @@
 									<goal>analyze</goal>
 								</goals>
 								<configuration>
-									<source>${project.build.directory}/jmeter/results/AsyncMethodBenchmarks.jtl</source>
+									<source>
+										${project.build.directory}/jmeter/results/AsyncMethodBenchmarks.jtl
+									</source>
 								</configuration>
 							</execution>
 							<execution>
@@ -434,7 +464,9 @@
 									<goal>analyze</goal>
 								</goals>
 								<configuration>
-									<source>${project.build.directory}/jmeter/results/SyncHttpBenchmarks.jtl</source>
+									<source>
+										${project.build.directory}/jmeter/results/SyncHttpBenchmarks.jtl
+									</source>
 								</configuration>
 							</execution>
 							<execution>
@@ -444,7 +476,9 @@
 									<goal>analyze</goal>
 								</goals>
 								<configuration>
-									<source>${project.build.directory}/jmeter/results/*.jtl</source>
+									<source>
+										${project.build.directory}/jmeter/results/*.jtl
+									</source>
 								</configuration>
 							</execution>
 						</executions>
@@ -461,25 +495,34 @@
 								</goals>
 								<phase>verify</phase>
 								<configuration>
-									<inputFile>${project.build.directory}/jmeter/results/AsyncHttpBenchmarks.jtl</inputFile>
+									<inputFile>
+										${project.build.directory}/jmeter/results/AsyncHttpBenchmarks.jtl
+									</inputFile>
 									<graphs>
 										<graph>
 											<pluginType>ResponseTimesOverTime</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/AsyncHttpBenchmarks-ResponseTimesOverTime.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/AsyncHttpBenchmarks-ResponseTimesOverTime.png
+											</outputFile>
 										</graph>
 										<graph>
-											<pluginType>ResponseTimesPercentiles</pluginType>
+											<pluginType>ResponseTimesPercentiles
+											</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/AsyncHttpBenchmarks-ResponseTimesPercentiles.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/AsyncHttpBenchmarks-ResponseTimesPercentiles.png
+											</outputFile>
 										</graph>
 										<graph>
 											<pluginType>LatenciesOverTime</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/AsyncHttpBenchmarks-LatenciesOverTime.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/AsyncHttpBenchmarks-LatenciesOverTime.png
+											</outputFile>
 										</graph>
 									</graphs>
 								</configuration>
@@ -491,25 +534,34 @@
 								</goals>
 								<phase>verify</phase>
 								<configuration>
-									<inputFile>${project.build.directory}/jmeter/results/AsyncMethodBenchmarks.jtl</inputFile>
+									<inputFile>
+										${project.build.directory}/jmeter/results/AsyncMethodBenchmarks.jtl
+									</inputFile>
 									<graphs>
 										<graph>
 											<pluginType>ResponseTimesOverTime</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/AsyncMethodBenchmarks-ResponseTimesOverTime.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/AsyncMethodBenchmarks-ResponseTimesOverTime.png
+											</outputFile>
 										</graph>
 										<graph>
-											<pluginType>ResponseTimesPercentiles</pluginType>
+											<pluginType>ResponseTimesPercentiles
+											</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/AsyncMethodBenchmarks-ResponseTimesPercentiles.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/AsyncMethodBenchmarks-ResponseTimesPercentiles.png
+											</outputFile>
 										</graph>
 										<graph>
 											<pluginType>LatenciesOverTime</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/AsyncMethodBenchmarks-LatenciesOverTime.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/AsyncMethodBenchmarks-LatenciesOverTime.png
+											</outputFile>
 										</graph>
 									</graphs>
 								</configuration>
@@ -521,25 +573,34 @@
 								</goals>
 								<phase>verify</phase>
 								<configuration>
-									<inputFile>${project.build.directory}/jmeter/results/SyncHttpBenchmarks.jtl</inputFile>
+									<inputFile>
+										${project.build.directory}/jmeter/results/SyncHttpBenchmarks.jtl
+									</inputFile>
 									<graphs>
 										<graph>
 											<pluginType>ResponseTimesOverTime</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/SyncHttpBenchmarks-ResponseTimesOverTime.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/SyncHttpBenchmarks-ResponseTimesOverTime.png
+											</outputFile>
 										</graph>
 										<graph>
-											<pluginType>ResponseTimesPercentiles</pluginType>
+											<pluginType>ResponseTimesPercentiles
+											</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/SyncHttpBenchmarks-ResponseTimesPercentiles.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/SyncHttpBenchmarks-ResponseTimesPercentiles.png
+											</outputFile>
 										</graph>
 										<graph>
 											<pluginType>LatenciesOverTime</pluginType>
 											<width>800</width>
 											<height>600</height>
-											<outputFile>${project.build.directory}/jmeter/results/SyncHttpBenchmarks-LatenciesOverTime.png</outputFile>
+											<outputFile>
+												${project.build.directory}/jmeter/results/SyncHttpBenchmarks-LatenciesOverTime.png
+											</outputFile>
 										</graph>
 									</graphs>
 								</configuration>

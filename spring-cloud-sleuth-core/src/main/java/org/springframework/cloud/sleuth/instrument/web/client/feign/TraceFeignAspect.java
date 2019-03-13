@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,10 +25,11 @@ import org.apache.commons.logging.LogFactory;
 import org.aspectj.lang.ProceedingJoinPoint;
 import org.aspectj.lang.annotation.Around;
 import org.aspectj.lang.annotation.Aspect;
+
 import org.springframework.beans.factory.BeanFactory;
 
 /**
- * Aspect for Feign clients so that you can autowire your custom components
+ * Aspect for Feign clients so that you can autowire your custom components.
  *
  * @author Marcin Grzejszczak
  * @since 1.1.2
@@ -57,10 +58,12 @@ class TraceFeignAspect {
 		return pjp.proceed();
 	}
 
-	Object executeTraceFeignClient(Object bean, ProceedingJoinPoint pjp) throws IOException {
+	Object executeTraceFeignClient(Object bean, ProceedingJoinPoint pjp)
+			throws IOException {
 		Object[] args = pjp.getArgs();
 		Request request = (Request) args[0];
 		Request.Options options = (Request.Options) args[1];
 		return ((Client) bean).execute(request, options);
 	}
+
 }

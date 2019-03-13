@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,13 +21,14 @@ import java.util.concurrent.Executor;
 import brave.Tracing;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.cloud.sleuth.DefaultSpanNamer;
 import org.springframework.cloud.sleuth.SpanNamer;
 
 /**
- * {@link Executor} that wraps {@link Runnable} in a trace representation
+ * {@link Executor} that wraps {@link Runnable} in a trace representation.
  *
  * @author Dave Syer
  * @since 1.0.0
@@ -36,9 +37,12 @@ public class LazyTraceExecutor implements Executor {
 
 	private static final Log log = LogFactory.getLog(LazyTraceExecutor.class);
 
-	private Tracing tracing;
 	private final BeanFactory beanFactory;
+
 	private final Executor delegate;
+
+	private Tracing tracing;
+
 	private SpanNamer spanNamer;
 
 	public LazyTraceExecutor(BeanFactory beanFactory, Executor delegate) {
@@ -48,6 +52,10 @@ public class LazyTraceExecutor implements Executor {
 
 	@Override
 	public void execute(Runnable command) {
+		if (ContextUtil.isContextInCreation(this.beanFactory)) {
+			this.delegate.execute(command);
+			return;
+		}
 		if (this.tracing == null) {
 			try {
 				this.tracing = this.beanFactory.getBean(Tracing.class);
@@ -67,10 +75,12 @@ public class LazyTraceExecutor implements Executor {
 				this.spanNamer = this.beanFactory.getBean(SpanNamer.class);
 			}
 			catch (NoSuchBeanDefinitionException e) {
-				log.warn("SpanNamer bean not found - will provide a manually created instance");
+				log.warn(
+						"SpanNamer bean not found - will provide a manually created instance");
 				return new DefaultSpanNamer();
 			}
 		}
 		return this.spanNamer;
 	}
+
 }

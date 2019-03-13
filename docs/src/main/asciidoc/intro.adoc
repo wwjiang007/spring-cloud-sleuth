@@ -33,7 +33,7 @@ of an action took place.
 Subtracting the `cs` timestamp from this timestamp reveals the network latency.
 * *ss*: Server Sent. Annotated upon completion of request processing (when the response got sent back to the client).
 Subtracting the `sr` timestamp from this timestamp reveals the time needed by the server side to process the request.
-* *cr*> Client Received. Signifies the end of the span.
+* *cr*: Client Received. Signifies the end of the span.
 The client has successfully received the response from the server side.
 Subtracting the `cs` timestamp from this timestamp reveals the whole time needed by the client to receive the response from the server.
 
@@ -49,7 +49,7 @@ Trace Id = X
 Span Id = D
 Client Sent
 
-This note indicats thatthe current span has *Trace Id* set to *X* and *Span Id* set to *D*.
+This note indicates that the current span has *Trace Id* set to *X* and *Span Id* set to *D*.
 Also, the `Client Sent` event took place.
 
 The following image shows how parent-child relationships of spans look:
@@ -76,7 +76,7 @@ That means that, if there were two spans sent to Zipkin with Server Received and
 
 Why is there a difference between the seven and four spans in this case?
 
-* Two spans come from the `http:/start` span. It has the Server Received (`sr`) and Server Sent (`ss`) annotations.
+* One span comes from the `http:/start` span. It has the Server Received (`sr`) and Server Sent (`ss`) annotations.
 * Two spans come from the RPC call from `service1` to `service2` to the `http:/foo` endpoint.
 The Client Sent (`cs`) and Client Received (`cr`) events took place on the `service1` side.
 Server Received (`sr`) and Server Sent (`ss`) events took place on the `service2` side.
@@ -219,14 +219,16 @@ The following example shows setting baggage on a span:
 
 [source,java]
 ----
-include::{github-raw}/spring-cloud-sleuth-core/src/test/java/org/springframework/cloud/sleuth/instrument/web/multiple/MultipleHopsIntegrationTests.java[tags=baggage,indent=0]
-}
+include::{github-raw}/spring-cloud-sleuth-core/src/test/java/org/springframework/cloud/sleuth/instrument/multiple/MultipleHopsIntegrationTests.java[tags=baggage,indent=0]
 ----
 
 ===== Baggage versus Span Tags
 
 Baggage travels with the trace (every child span contains the baggage of its parent).
 Zipkin has no knowledge of baggage and does not receive that information.
+
+IMPORTANT: Starting from Sleuth 2.0.0 you have to pass the baggage key names explicitly
+in your project configuration. Read more about that setup <<prefixed-fields,here>>
 
 Tags are attached to a specific span. In other words, they are presented only for that particular span.
 However, you can search by tag to find the trace, assuming a span having the searched tag value exists.
@@ -237,9 +239,16 @@ IMPORTANT: The span must be in scope.
 
 The following listing shows integration tests that use baggage:
 
+.The setup
+[source,yml]
+----
+include::{github-raw}/spring-cloud-sleuth-core/src/test/resources/application-baggage.yml[indent=0]
+----
+
+.The code
 [source,java]
 ----
-include::{github-raw}/spring-cloud-sleuth-core/src/test/java/org/springframework/cloud/sleuth/instrument/web/multiple/MultipleHopsIntegrationTests.java[tags=baggage_tag,indent=0]
+include::{github-raw}/spring-cloud-sleuth-core/src/test/java/org/springframework/cloud/sleuth/instrument/multiple/MultipleHopsIntegrationTests.java[tags=baggage_tag,indent=0]
 ----
 
 [[sleuth-adding-project]]
@@ -348,6 +357,13 @@ dependencies { <2>
 If you want to use RabbitMQ or Kafka instead of HTTP, add the `spring-rabbit` or `spring-kafka` dependency.
 The default destination name is `zipkin`.
 
+If using Kafka, you must set the property `spring.zipkin.sender.type` property accordingly:
+
+[source,yaml]
+----
+spring.zipkin.sender.type: kafka
+----
+
 CAUTION: `spring-cloud-sleuth-stream` is deprecated and incompatible with these destinations.
 
 If you want Sleuth over RabbitMQ, add the `spring-cloud-starter-zipkin` and `spring-rabbit`
@@ -401,10 +417,21 @@ dependencies {
 <2> Add the dependency to `spring-cloud-starter-zipkin`. That way, all nested dependencies get downloaded.
 <3> To automatically configure RabbitMQ, add the `spring-rabbit` dependency.
 
+=== Overriding the auto-configuration of Zipkin
+
+Spring Cloud Sleuth supports sending traces to multiple tracing systems as of version 2.1.0.
+In order to get this to work, every tracing system needs to have a `Reporter<Span>` and `Sender`.
+If you want to override the provided beans you need to give them a specific name.
+To do this you can use respectively `ZipkinAutoConfiguration.REPORTER_BEAN_NAME` and `ZipkinAutoConfiguration.SENDER_BEAN_NAME`.
+
+[source,java]
+----
+include::../../../spring-cloud-sleuth-zipkin/src/test/java/org/springframework/cloud/sleuth/zipkin2/ZipkinAutoConfigurationTests.java[tags=override_default_beans,indent=0]
+----
+
 == Additional Resources
 
-You can watch a video of Marcin Grzejszczak talking about Spring Cloud Sleuth and Zipkin:
+You can watch a video of https://twitter.com/reshmi9k[Reshmi Krishna] and https://twitter.com/mgrzejszczak[Marcin Grzejszczak] talking about Spring Cloud
+Sleuth and Zipkin https://content.pivotal.io/springone-platform-2017/distributed-tracing-latency-analysis-for-your-microservices-grzejszczak-krishna[by clicking here].
 
-video::eQV71Mw1u1c[youtube]
-
-https://www.youtube.com/watch?v=eQV71Mw1u1c[click here to see the video]
+You can check different setups of Sleuth and Brave https://github.com/openzipkin/sleuth-webmvc-example[in the openzipkin/sleuth-webmvc-example repository].

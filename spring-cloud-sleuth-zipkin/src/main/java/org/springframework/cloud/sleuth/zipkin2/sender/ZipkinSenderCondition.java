@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -31,12 +31,14 @@ import static org.springframework.cloud.sleuth.zipkin2.sender.ZipkinSenderConfig
 class ZipkinSenderCondition extends SpringBootCondition {
 
 	@Override
-	public ConditionOutcome getMatchOutcome(ConditionContext context, AnnotatedTypeMetadata md) {
+	public ConditionOutcome getMatchOutcome(ConditionContext context,
+			AnnotatedTypeMetadata md) {
 		String sourceClass = "";
 		if (md instanceof ClassMetadata) {
 			sourceClass = ((ClassMetadata) md).getClassName();
 		}
-		ConditionMessage.Builder message = ConditionMessage.forCondition("ZipkinSender", sourceClass);
+		ConditionMessage.Builder message = ConditionMessage.forCondition("ZipkinSender",
+				sourceClass);
 		String property = context.getEnvironment()
 				.getProperty("spring.zipkin.sender.type");
 		if (StringUtils.isEmpty(property)) {
@@ -48,4 +50,5 @@ class ZipkinSenderCondition extends SpringBootCondition {
 		}
 		return ConditionOutcome.noMatch(message.because(property + " sender type"));
 	}
+
 }

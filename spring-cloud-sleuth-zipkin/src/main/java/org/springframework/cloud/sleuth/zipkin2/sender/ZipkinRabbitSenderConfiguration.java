@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,30 +16,34 @@
 
 package org.springframework.cloud.sleuth.zipkin2.sender;
 
+import zipkin2.reporter.Sender;
+import zipkin2.reporter.amqp.RabbitMQSender;
+
 import org.springframework.amqp.rabbit.connection.CachingConnectionFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.amqp.RabbitProperties;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.cloud.sleuth.zipkin2.ZipkinAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Conditional;
 import org.springframework.context.annotation.Configuration;
-import zipkin2.reporter.Sender;
-import zipkin2.reporter.amqp.RabbitMQSender;
 
 @Configuration
 @ConditionalOnBean(CachingConnectionFactory.class)
-@ConditionalOnMissingBean(Sender.class)
+@ConditionalOnMissingBean(name = ZipkinAutoConfiguration.SENDER_BEAN_NAME)
 @Conditional(ZipkinSenderCondition.class)
 class ZipkinRabbitSenderConfiguration {
+
 	@Value("${spring.zipkin.rabbitmq.queue:zipkin}")
 	private String queue;
 
-	@Bean Sender rabbitSender(CachingConnectionFactory connectionFactory, RabbitProperties config) {
+	@Bean(ZipkinAutoConfiguration.SENDER_BEAN_NAME)
+	Sender rabbitSender(CachingConnectionFactory connectionFactory,
+			RabbitProperties config) {
 		return RabbitMQSender.newBuilder()
 				.connectionFactory(connectionFactory.getRabbitConnectionFactory())
-				.queue(this.queue)
-				.addresses(config.determineAddresses())
-				.build();
+				.queue(this.queue).addresses(config.determineAddresses()).build();
 	}
+
 }

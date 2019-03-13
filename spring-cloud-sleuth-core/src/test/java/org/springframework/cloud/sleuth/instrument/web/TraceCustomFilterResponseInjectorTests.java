@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,22 @@
 
 package org.springframework.cloud.sleuth.instrument.web;
 
-import javax.servlet.FilterChain;
-import javax.servlet.ServletException;
-import javax.servlet.ServletRequest;
-import javax.servlet.ServletResponse;
-import javax.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
 
+import javax.servlet.FilterChain;
+import javax.servlet.ServletException;
+import javax.servlet.ServletRequest;
+import javax.servlet.ServletResponse;
+import javax.servlet.http.HttpServletResponse;
+
 import brave.Span;
 import brave.http.HttpTracing;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -50,19 +52,25 @@ import org.springframework.web.client.RestTemplate;
 import org.springframework.web.filter.GenericFilterBean;
 
 import static org.assertj.core.api.BDDAssertions.then;
+import static org.springframework.boot.test.context.SpringBootTest.WebEnvironment.RANDOM_PORT;
 
 @RunWith(SpringJUnit4ClassRunner.class)
-@SpringBootTest(classes = TraceCustomFilterResponseInjectorTests.Config.class,
-		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = TraceCustomFilterResponseInjectorTests.Config.class, webEnvironment = RANDOM_PORT)
 @DirtiesContext
 public class TraceCustomFilterResponseInjectorTests {
+
 	static final String TRACE_ID_NAME = "X-B3-TraceId";
 	static final String SPAN_ID_NAME = "X-B3-SpanId";
-	
-	@Autowired RestTemplate restTemplate;
-	@Autowired Config config;
-	@Autowired CustomRestController customRestController;
-	
+
+	@Autowired
+	RestTemplate restTemplate;
+
+	@Autowired
+	Config config;
+
+	@Autowired
+	CustomRestController customRestController;
+
 	@Test
 	@SuppressWarnings("unchecked")
 	public void should_inject_trace_and_span_ids_in_response_headers() {
@@ -71,22 +79,23 @@ public class TraceCustomFilterResponseInjectorTests {
 				.build();
 
 		@SuppressWarnings("rawtypes")
-		ResponseEntity<Map> responseEntity = this.restTemplate.exchange(requestEntity, Map.class);
+		ResponseEntity<Map> responseEntity = this.restTemplate.exchange(requestEntity,
+				Map.class);
 
-		then(responseEntity.getHeaders())
-				.containsKeys(TRACE_ID_NAME, SPAN_ID_NAME)
+		then(responseEntity.getHeaders()).containsKeys(TRACE_ID_NAME, SPAN_ID_NAME)
 				.as("Trace headers must be present in response headers");
 	}
 
 	@Configuration
 	@EnableAutoConfiguration
-	static class Config
-			implements ApplicationListener<ServletWebServerInitializedEvent> {
+	static class Config implements ApplicationListener<ServletWebServerInitializedEvent> {
+
 		int port;
 
 		// tag::configuration[]
 		@Bean
-		HttpResponseInjectingTraceFilter responseInjectingTraceFilter(HttpTracing httpTracing) {
+		HttpResponseInjectingTraceFilter responseInjectingTraceFilter(
+				HttpTracing httpTracing) {
 			return new HttpResponseInjectingTraceFilter(httpTracing);
 		}
 		// end::configuration[]
@@ -106,7 +115,6 @@ public class TraceCustomFilterResponseInjectorTests {
 			return new CustomRestController();
 		}
 
-
 	}
 
 	// tag::injector[]
@@ -114,20 +122,21 @@ public class TraceCustomFilterResponseInjectorTests {
 
 		private final HttpTracing httpTracing;
 
-		public HttpResponseInjectingTraceFilter(HttpTracing httpTracing) {
+		HttpResponseInjectingTraceFilter(HttpTracing httpTracing) {
 			this.httpTracing = httpTracing;
 		}
 
 		@Override
-		public void doFilter(ServletRequest request, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+		public void doFilter(ServletRequest request, ServletResponse servletResponse,
+				FilterChain filterChain) throws IOException, ServletException {
 			HttpServletResponse response = (HttpServletResponse) servletResponse;
 			Span currentSpan = this.httpTracing.tracing().tracer().currentSpan();
-			response.addHeader("X-B3-TraceId",
-					currentSpan.context().traceIdString());
+			response.addHeader("X-B3-TraceId", currentSpan.context().traceIdString());
 			response.addHeader("X-B3-SpanId",
 					SpanUtil.idToHex(currentSpan.context().spanId()));
 			filterChain.doFilter(request, response);
 		}
+
 	}
 	// end::injector[]
 
@@ -142,5 +151,7 @@ public class TraceCustomFilterResponseInjectorTests {
 			}
 			return map;
 		}
+
 	}
+
 }

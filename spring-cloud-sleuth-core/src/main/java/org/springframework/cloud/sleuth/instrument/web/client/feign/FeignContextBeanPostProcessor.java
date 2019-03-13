@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,7 +25,6 @@ import org.springframework.cloud.openfeign.FeignContext;
  * Post processor that wraps Feign Context in its tracing representations.
  *
  * @author Marcin Grzejszczak
- *
  * @since 1.0.2
  */
 final class FeignContextBeanPostProcessor implements BeanPostProcessor {
@@ -54,4 +53,5 @@ final class FeignContextBeanPostProcessor implements BeanPostProcessor {
 	private TraceFeignObjectWrapper traceFeignObjectWrapper() {
 		return new TraceFeignObjectWrapper(this.beanFactory);
 	}
+
 }

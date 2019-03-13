@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,7 @@ import brave.http.HttpAdapter;
 import brave.http.HttpSampler;
 
 /**
- * Doesn't sample a span if skip pattern is matched
+ * Doesn't sample a span if skip pattern is matched.
  *
  * @author Marcin Grzejszczak
  * @since 2.0.0
@@ -35,7 +35,8 @@ class SleuthHttpSampler extends HttpSampler {
 		this.pattern = provider.skipPattern();
 	}
 
-	@Override public <Req> Boolean trySample(HttpAdapter<Req, ?> adapter, Req request) {
+	@Override
+	public <Req> Boolean trySample(HttpAdapter<Req, ?> adapter, Req request) {
 		String url = adapter.path(request);
 		boolean shouldSkip = this.pattern.matcher(url).matches();
 		if (shouldSkip) {
@@ -43,4 +44,5 @@ class SleuthHttpSampler extends HttpSampler {
 		}
 		return null;
 	}
+
 }

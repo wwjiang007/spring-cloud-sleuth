@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,40 +20,42 @@ import brave.Span;
 import brave.Tracer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.http.HttpMethod;
-import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import org.springframework.http.HttpMethod;
+import org.springframework.web.reactive.function.client.WebClient;
+
 class RequestSender {
 
-    private static final Logger LOGGER = LoggerFactory.getLogger(RequestSender.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(RequestSender.class);
 
-    private final WebClient webClient;
-    private final Tracer tracer;
-    int port;
-    Span span;
+	private final WebClient webClient;
 
-    public RequestSender(WebClient webClient, Tracer tracer) {
-        this.webClient = webClient;
-        this.tracer = tracer;
-    }
+	private final Tracer tracer;
 
-    public Mono<String> get(Integer someParameterNotUsedNow){
-        LOGGER.info("getting for parameter {}", someParameterNotUsedNow);
-        this.span = this.tracer.currentSpan();
-        return webClient
-                .method(HttpMethod.GET)
-                .uri("http://localhost:" + this.port + "/foo")
-                .retrieve().bodyToMono(String.class);
-    }
+	int port;
 
-    public Flux<String> getAll(){
-        LOGGER.info("Before merge");
-        Flux<String> merge = Flux.merge(get(1), get(2), get(3));
-        LOGGER.info("after merge");
-        return merge;
-    }
+	Span span;
 
+	RequestSender(WebClient webClient, Tracer tracer) {
+		this.webClient = webClient;
+		this.tracer = tracer;
+	}
+
+	public Mono<String> get(Integer someParameterNotUsedNow) {
+		LOGGER.info("getting for parameter {}", someParameterNotUsedNow);
+		this.span = this.tracer.currentSpan();
+		return this.webClient.method(HttpMethod.GET)
+				.uri("http://localhost:" + this.port + "/foo").retrieve()
+				.bodyToMono(String.class);
+	}
+
+	public Flux<String> getAll() {
+		LOGGER.info("Before merge");
+		Flux<String> merge = Flux.merge(get(1), get(2), get(3));
+		LOGGER.info("after merge");
+		return merge;
+	}
 
 }

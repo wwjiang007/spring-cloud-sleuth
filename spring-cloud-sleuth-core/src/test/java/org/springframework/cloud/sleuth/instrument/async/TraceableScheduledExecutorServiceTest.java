@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,7 +22,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Predicate;
 
 import brave.Tracing;
-import brave.propagation.StrictCurrentTraceContext;
+import brave.propagation.StrictScopeDecorator;
+import brave.propagation.ThreadLocalCurrentTraceContext;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -31,6 +32,7 @@ import org.mockito.BDDMockito;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.cloud.sleuth.DefaultSpanNamer;
 import org.springframework.cloud.sleuth.SpanNamer;
@@ -38,6 +40,7 @@ import org.springframework.cloud.sleuth.SpanNamer;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.then;
+import static org.mockito.Mockito.never;
 
 /**
  * @author Marcin Grzejszczak
@@ -46,12 +49,16 @@ import static org.mockito.BDDMockito.then;
 public class TraceableScheduledExecutorServiceTest {
 
 	Tracing tracing = Tracing.newBuilder()
-			.currentTraceContext(new StrictCurrentTraceContext())
+			.currentTraceContext(ThreadLocalCurrentTraceContext.newBuilder()
+					.addScopeDecorator(StrictScopeDecorator.create()).build())
 			.build();
+
 	@Mock
 	BeanFactory beanFactory;
+
 	@Mock
 	ScheduledExecutorService scheduledExecutorService;
+
 	@InjectMocks
 	TraceableScheduledExecutorService traceableScheduledExecutorService;
 
@@ -75,30 +82,80 @@ public class TraceableScheduledExecutorServiceTest {
 		this.traceableScheduledExecutorService.schedule(aCallable(), 1L, TimeUnit.DAYS);
 
 		then(this.scheduledExecutorService).should().schedule(
-				BDDMockito.argThat(matcher(Callable.class,
-						instanceOf(TraceCallable.class))),
+				BDDMockito.argThat(
+						matcher(Callable.class, instanceOf(TraceCallable.class))),
 				anyLong(), any(TimeUnit.class));
 	}
 
 	@Test
-	public void should_schedule_at_fixed_rate_a_trace_runnable()
-			throws Exception {
+	public void should_schedule_at_fixed_rate_a_trace_runnable() throws Exception {
 		this.traceableScheduledExecutorService.scheduleAtFixedRate(aRunnable(), 1L, 1L,
 				TimeUnit.DAYS);
 
 		then(this.scheduledExecutorService).should().scheduleAtFixedRate(
-				BDDMockito.argThat(matcher(Runnable.class, instanceOf(TraceRunnable.class))),
+				BDDMockito.argThat(
+						matcher(Runnable.class, instanceOf(TraceRunnable.class))),
 				anyLong(), anyLong(), any(TimeUnit.class));
 	}
 
 	@Test
-	public void should_schedule_with_fixed_delay_a_trace_runnable()
-			throws Exception {
+	public void should_schedule_with_fixed_delay_a_trace_runnable() throws Exception {
 		this.traceableScheduledExecutorService.scheduleWithFixedDelay(aRunnable(), 1L, 1L,
 				TimeUnit.DAYS);
 
 		then(this.scheduledExecutorService).should().scheduleWithFixedDelay(
-				BDDMockito.argThat(matcher(Runnable.class, instanceOf(TraceRunnable.class))),
+				BDDMockito.argThat(
+						matcher(Runnable.class, instanceOf(TraceRunnable.class))),
+				anyLong(), anyLong(), any(TimeUnit.class));
+	}
+
+	@Test
+	public void should_not_schedule_a_trace_runnable_when_context_not_ready()
+			throws Exception {
+		ContextRefreshedListenerAccessor.set(this.beanFactory, false);
+		this.traceableScheduledExecutorService.schedule(aRunnable(), 1L, TimeUnit.DAYS);
+
+		then(this.scheduledExecutorService).should(never()).schedule(
+				BDDMockito.argThat(
+						matcher(Runnable.class, instanceOf(TraceRunnable.class))),
+				anyLong(), any(TimeUnit.class));
+	}
+
+	@Test
+	public void should_not_schedule_a_trace_callable_when_context_not_ready()
+			throws Exception {
+		ContextRefreshedListenerAccessor.set(this.beanFactory, false);
+		this.traceableScheduledExecutorService.schedule(aCallable(), 1L, TimeUnit.DAYS);
+
+		then(this.scheduledExecutorService).should(never()).schedule(
+				BDDMockito.argThat(
+						matcher(Callable.class, instanceOf(TraceCallable.class))),
+				anyLong(), any(TimeUnit.class));
+	}
+
+	@Test
+	public void should_not_schedule_at_fixed_rate_a_trace_runnable_when_context_not_ready()
+			throws Exception {
+		ContextRefreshedListenerAccessor.set(this.beanFactory, false);
+		this.traceableScheduledExecutorService.scheduleAtFixedRate(aRunnable(), 1L, 1L,
+				TimeUnit.DAYS);
+
+		then(this.scheduledExecutorService).should(never()).scheduleAtFixedRate(
+				BDDMockito.argThat(
+						matcher(Runnable.class, instanceOf(TraceRunnable.class))),
+				anyLong(), anyLong(), any(TimeUnit.class));
+	}
+
+	@Test
+	public void should_not_schedule_with_fixed_delay_a_trace_runnable_when_context_not_ready()
+			throws Exception {
+		ContextRefreshedListenerAccessor.set(this.beanFactory, false);
+		this.traceableScheduledExecutorService.scheduleWithFixedDelay(aRunnable(), 1L, 1L,
+				TimeUnit.DAYS);
+
+		then(this.scheduledExecutorService).should(never()).scheduleWithFixedDelay(
+				BDDMockito.argThat(
+						matcher(Runnable.class, instanceOf(TraceRunnable.class))),
 				anyLong(), anyLong(), any(TimeUnit.class));
 	}
 
@@ -120,8 +177,12 @@ public class TraceableScheduledExecutorServiceTest {
 	}
 
 	BeanFactory beanFactory() {
-		BDDMockito.given(this.beanFactory.getBean(Tracing.class)).willReturn(this.tracing);
-		BDDMockito.given(this.beanFactory.getBean(SpanNamer.class)).willReturn(new DefaultSpanNamer());
+		BDDMockito.given(this.beanFactory.getBean(Tracing.class))
+				.willReturn(this.tracing);
+		BDDMockito.given(this.beanFactory.getBean(SpanNamer.class))
+				.willReturn(new DefaultSpanNamer());
+		ContextRefreshedListenerAccessor.set(this.beanFactory, true);
 		return this.beanFactory;
 	}
+
 }

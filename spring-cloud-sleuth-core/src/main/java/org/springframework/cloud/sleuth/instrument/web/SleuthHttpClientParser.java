@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,10 +21,11 @@ import java.net.URI;
 import brave.SpanCustomizer;
 import brave.http.HttpAdapter;
 import brave.http.HttpClientParser;
+
 import org.springframework.cloud.sleuth.util.SpanNameUtil;
 
 /**
- * An {@link HttpClientParser} that behaves like Sleuth in versions 1.x
+ * An {@link HttpClientParser} that behaves like Sleuth in versions 1.x.
  *
  * @author Marcin Grzejszczak
  * @since 2.0.0
@@ -32,8 +33,11 @@ import org.springframework.cloud.sleuth.util.SpanNameUtil;
 class SleuthHttpClientParser extends HttpClientParser {
 
 	private static final String HOST_KEY = "http.host";
+
 	private static final String METHOD_KEY = "http.method";
+
 	private static final String PATH_KEY = "http.path";
+
 	private static final String URL_KEY = "http.url";
 
 	private final TraceKeys traceKeys;
@@ -42,24 +46,25 @@ class SleuthHttpClientParser extends HttpClientParser {
 		this.traceKeys = traceKeys;
 	}
 
-	@Override protected <Req> String spanName(HttpAdapter<Req, ?> adapter,
-			Req req) {
+	@Override
+	protected <Req> String spanName(HttpAdapter<Req, ?> adapter, Req req) {
 		return getName(URI.create(adapter.url(req)));
 	}
 
-	@Override public <Req> void request(HttpAdapter<Req, ?> adapter, Req req,
+	@Override
+	public <Req> void request(HttpAdapter<Req, ?> adapter, Req req,
 			SpanCustomizer customizer) {
 		super.request(adapter, req, customizer);
 		String url = adapter.url(req);
 		URI uri = URI.create(url);
-		addRequestTags(customizer, url, uri.getHost(), uri.getPath(), adapter.method(req));
-		this.traceKeys.getHttp().getHeaders()
-				.forEach(s -> {
-						String headerValue = adapter.requestHeader(req, s);
-						if (headerValue != null) {
-							customizer.tag(key(s), headerValue);
-						}
-				});
+		addRequestTags(customizer, url, uri.getHost(), uri.getPath(),
+				adapter.method(req));
+		this.traceKeys.getHttp().getHeaders().forEach(((s) -> {
+			String headerValue = adapter.requestHeader(req, s);
+			if (headerValue != null) {
+				customizer.tag(key(s), headerValue);
+			}
+		}));
 	}
 
 	private String key(String key) {
@@ -85,4 +90,5 @@ class SleuthHttpClientParser extends HttpClientParser {
 		customizer.tag(PATH_KEY, path);
 		customizer.tag(METHOD_KEY, method);
 	}
+
 }

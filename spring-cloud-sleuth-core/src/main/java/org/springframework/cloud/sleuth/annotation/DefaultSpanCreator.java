@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -13,34 +13,36 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.cloud.sleuth.annotation;
 
 import brave.SpanCustomizer;
 import org.aopalliance.intercept.MethodInvocation;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.cloud.sleuth.util.SpanNameUtil;
 import org.springframework.util.StringUtils;
 
 /**
- * Default implementation of the {@link NewSpanParser} that parses only the
- * span name.
+ * Default implementation of the {@link NewSpanParser} that parses only the span name.
  *
  * @author Christian Schwerdtfeger
  * @since 1.2.0
  */
-class DefaultNewSpanParser implements NewSpanParser {
+class DefaultSpanCreator implements NewSpanParser {
 
-	private static final Log log = LogFactory.getLog(DefaultNewSpanParser.class);
+	private static final Log log = LogFactory.getLog(DefaultSpanCreator.class);
 
 	@Override
 	public void parse(MethodInvocation pjp, NewSpan newSpan, SpanCustomizer span) {
-		String name = StringUtils.isEmpty(newSpan.name()) ?
-				pjp.getMethod().getName() : newSpan.name();
+		String name = newSpan == null || StringUtils.isEmpty(newSpan.name())
+				? pjp.getMethod().getName() : newSpan.name();
 		String changedName = SpanNameUtil.toLowerHyphen(name);
 		if (log.isDebugEnabled()) {
-			log.debug("For the class [" + pjp.getThis().getClass() + "] method "
-					+ "[" + pjp.getMethod().getName() + "] will name the span [" + changedName + "]");
+			log.debug("For the class [" + pjp.getThis().getClass() + "] method " + "["
+					+ pjp.getMethod().getName() + "] will name the span [" + changedName
+					+ "]");
 		}
 		span.name(changedName);
 	}

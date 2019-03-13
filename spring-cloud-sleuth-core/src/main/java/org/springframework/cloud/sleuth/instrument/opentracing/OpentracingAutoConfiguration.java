@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.cloud.sleuth.instrument.opentracing;
 import brave.Tracing;
 import brave.opentracing.BraveTracer;
 import io.opentracing.Tracer;
+
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
@@ -28,15 +29,15 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 /**
- * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration Auto-configuration}
- * to enable tracing via Opentracing.
+ * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration
+ * Auto-configuration} to enable tracing via Opentracing.
  *
  * @author Spencer Gibb
  * @author Marcin Grzejszczak
  * @since 2.0.0
  */
 @Configuration
-@ConditionalOnProperty(value="spring.sleuth.opentracing.enabled", matchIfMissing=true)
+@ConditionalOnProperty(value = "spring.sleuth.opentracing.enabled", matchIfMissing = true)
 @ConditionalOnBean(Tracing.class)
 @ConditionalOnClass(Tracer.class)
 @EnableConfigurationProperties(SleuthOpentracingProperties.class)
@@ -44,7 +45,9 @@ public class OpentracingAutoConfiguration {
 
 	@Bean
 	@ConditionalOnMissingBean
+	@ConditionalOnClass(name = "brave.opentracing.BraveTracer")
 	Tracer sleuthOpenTracing(brave.Tracing braveTracing) {
 		return BraveTracer.create(braveTracing);
 	}
+
 }

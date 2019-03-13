@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import brave.Span;
 import brave.Tracer;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.web.servlet.context.ServletWebServerInitializedEvent;
 import org.springframework.context.ApplicationListener;
@@ -34,26 +35,30 @@ import org.springframework.web.client.RestTemplate;
  * @author Spencer Gibb
  */
 @RestController
-public class SampleController implements
-ApplicationListener<ServletWebServerInitializedEvent> {
+public class SampleController
+		implements ApplicationListener<ServletWebServerInitializedEvent> {
 
 	private static final Log log = LogFactory.getLog(SampleController.class);
 
 	@Autowired
 	private RestTemplate restTemplate;
+
 	@Autowired
 	private Tracer tracer;
+
 	@Autowired
 	private SampleBackground controller;
+
 	private Random random = new Random();
+
 	private int port;
 
 	@RequestMapping("/")
 	public String hi() throws InterruptedException {
 		Thread.sleep(this.random.nextInt(1000));
 		log.info("Home page");
-		String s = this.restTemplate.getForObject("http://localhost:" + this.port
-				+ "/hi2", String.class);
+		String s = this.restTemplate
+				.getForObject("http://localhost:" + this.port + "/hi2", String.class);
 		return "hi/" + s;
 	}
 
@@ -95,8 +100,8 @@ ApplicationListener<ServletWebServerInitializedEvent> {
 		Thread.sleep(millis);
 		this.tracer.currentSpan().tag("random-sleep-millis", String.valueOf(millis));
 
-		String s = this.restTemplate.getForObject("http://localhost:" + this.port
-				+ "/call", String.class);
+		String s = this.restTemplate
+				.getForObject("http://localhost:" + this.port + "/call", String.class);
 		span.finish();
 		return "traced/" + s;
 	}
@@ -107,8 +112,8 @@ ApplicationListener<ServletWebServerInitializedEvent> {
 		log.info(String.format("Sleeping for [%d] millis", millis));
 		Thread.sleep(millis);
 		this.tracer.currentSpan().tag("random-sleep-millis", String.valueOf(millis));
-		String s = this.restTemplate.getForObject("http://localhost:" + this.port
-				+ "/call", String.class);
+		String s = this.restTemplate
+				.getForObject("http://localhost:" + this.port + "/call", String.class);
 		return "start/" + s;
 	}
 
@@ -116,4 +121,5 @@ ApplicationListener<ServletWebServerInitializedEvent> {
 	public void onApplicationEvent(ServletWebServerInitializedEvent event) {
 		this.port = event.getSource().getPort();
 	}
+
 }

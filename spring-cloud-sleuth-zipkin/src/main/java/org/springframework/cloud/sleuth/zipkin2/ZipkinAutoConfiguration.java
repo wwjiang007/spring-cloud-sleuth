@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,28 +18,25 @@ package org.springframework.cloud.sleuth.zipkin2;
 
 import java.util.concurrent.TimeUnit;
 
-import brave.sampler.Sampler;
 import zipkin2.Span;
-import zipkin2.codec.BytesEncoder;
 import zipkin2.reporter.AsyncReporter;
-import zipkin2.reporter.InMemoryReporterMetrics;
 import zipkin2.reporter.Reporter;
 import zipkin2.reporter.ReporterMetrics;
 import zipkin2.reporter.Sender;
+
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.web.ServerProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.client.serviceregistry.Registration;
 import org.springframework.cloud.commons.util.InetUtils;
-import org.springframework.cloud.context.config.annotation.RefreshScope;
 import org.springframework.cloud.sleuth.autoconfig.TraceAutoConfiguration;
-import org.springframework.cloud.sleuth.sampler.ProbabilityBasedSampler;
-import org.springframework.cloud.sleuth.sampler.SamplerProperties;
+import org.springframework.cloud.sleuth.sampler.SamplerAutoConfiguration;
 import org.springframework.cloud.sleuth.zipkin2.sender.ZipkinSenderConfigurationImportSelector;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,84 +45,57 @@ import org.springframework.core.env.Environment;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration Auto-configuration}
- * enables reporting to Zipkin via HTTP. Has a default {@link Sampler} set as
- * {@link ProbabilityBasedSampler}.
+ * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration
+ * Auto-configuration} enables reporting to Zipkin via HTTP. Has a default sampler set
+ * from the {@link SamplerAutoConfiguration}
  *
- * The {@link ZipkinRestTemplateCustomizer} allows you to customize the {@link RestTemplate}
- * that is used to send Spans to Zipkin. Its default implementation - {@link DefaultZipkinRestTemplateCustomizer}
- * adds the GZip compression.
+ * The {@link ZipkinRestTemplateCustomizer} allows you to customize the
+ * {@link RestTemplate} that is used to send Spans to Zipkin. Its default implementation -
+ * {@link DefaultZipkinRestTemplateCustomizer} adds the GZip compression.
  *
  * @author Spencer Gibb
+ * @author Tim Ysewyn
  * @since 1.0.0
- *
- * @see ProbabilityBasedSampler
+ * @see SamplerAutoConfiguration
  * @see ZipkinRestTemplateCustomizer
  * @see DefaultZipkinRestTemplateCustomizer
  */
 @Configuration
-@EnableConfigurationProperties({ZipkinProperties.class, SamplerProperties.class})
-@ConditionalOnProperty(value = "spring.zipkin.enabled", matchIfMissing = true)
+@EnableConfigurationProperties(ZipkinProperties.class)
+@ConditionalOnProperty(value = { "spring.sleuth.enabled",
+		"spring.zipkin.enabled" }, matchIfMissing = true)
 @AutoConfigureBefore(TraceAutoConfiguration.class)
-@Import(ZipkinSenderConfigurationImportSelector.class)
+@AutoConfigureAfter(name = "org.springframework.cloud.autoconfigure.RefreshAutoConfiguration")
+@Import({ ZipkinSenderConfigurationImportSelector.class, SamplerAutoConfiguration.class })
 public class ZipkinAutoConfiguration {
 
 	/**
-	 * Accepts a sender so you can plug-in any standard one. Returns a Reporter so you can also
-	 * replace with a standard one.
+	 * Zipkin reporter bean name. Name of the bean matters for supporting multiple tracing
+	 * systems.
 	 */
-	@Bean
-	@ConditionalOnMissingBean
-	public Reporter<Span> reporter(
-			ReporterMetrics reporterMetrics,
-			ZipkinProperties zipkin,
-			Sender sender,
-			BytesEncoder<Span> spanBytesEncoder
-	) {
-		return AsyncReporter.builder(sender)
-				.queuedMaxSpans(1000) // historical constraint. Note: AsyncReporter supports memory bounds
+	public static final String REPORTER_BEAN_NAME = "zipkinReporter";
+
+	/**
+	 * Zipkin sender bean name. Name of the bean matters for supporting multiple tracing
+	 * systems.
+	 */
+	public static final String SENDER_BEAN_NAME = "zipkinSender";
+
+	@Bean(REPORTER_BEAN_NAME)
+	@ConditionalOnMissingBean(name = REPORTER_BEAN_NAME)
+	public Reporter<Span> reporter(ReporterMetrics reporterMetrics,
+			ZipkinProperties zipkin, @Qualifier(SENDER_BEAN_NAME) Sender sender) {
+		// historical constraint. Note: AsyncReporter supports memory bounds
+		return AsyncReporter.builder(sender).queuedMaxSpans(1000)
 				.messageTimeout(zipkin.getMessageTimeout(), TimeUnit.SECONDS)
-				.metrics(reporterMetrics)
-				.build(spanBytesEncoder);
+				.metrics(reporterMetrics).build(zipkin.getEncoder());
 	}
 
 	@Bean
 	@ConditionalOnMissingBean
-	public BytesEncoder<Span> spanBytesEncoder(ZipkinProperties zipkinProperties) {
-		return zipkinProperties.getEncoder();
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	public ZipkinRestTemplateCustomizer zipkinRestTemplateCustomizer(ZipkinProperties zipkinProperties) {
+	public ZipkinRestTemplateCustomizer zipkinRestTemplateCustomizer(
+			ZipkinProperties zipkinProperties) {
 		return new DefaultZipkinRestTemplateCustomizer(zipkinProperties);
-	}
-
-	@Bean
-	@ConditionalOnMissingBean
-	ReporterMetrics sleuthReporterMetrics() {
-		return new InMemoryReporterMetrics(); 
-	}
-	
-	@Configuration
-	@ConditionalOnClass(RefreshScope.class)
-	protected static class RefreshScopedProbabilityBasedSamplerConfiguration {
-		@Bean
-		@RefreshScope
-		@ConditionalOnMissingBean
-		public Sampler defaultTraceSampler(SamplerProperties config) {
-			return new ProbabilityBasedSampler(config);
-		}
-	}
-
-	@Configuration
-	@ConditionalOnMissingClass("org.springframework.cloud.context.config.annotation.RefreshScope")
-	protected static class NonRefreshScopeProbabilityBasedSamplerConfiguration {
-		@Bean
-		@ConditionalOnMissingBean
-		public Sampler defaultTraceSampler(SamplerProperties config) {
-			return new ProbabilityBasedSampler(config);
-		}
 	}
 
 	@Configuration
@@ -133,13 +103,13 @@ public class ZipkinAutoConfiguration {
 	@ConditionalOnProperty(value = "spring.zipkin.locator.discovery.enabled", havingValue = "false", matchIfMissing = true)
 	protected static class DefaultEndpointLocatorConfiguration {
 
-		@Autowired(required=false)
+		@Autowired(required = false)
 		private ServerProperties serverProperties;
 
 		@Autowired
 		private ZipkinProperties zipkinProperties;
 
-		@Autowired(required=false)
+		@Autowired(required = false)
 		private InetUtils inetUtils;
 
 		@Autowired
@@ -147,8 +117,8 @@ public class ZipkinAutoConfiguration {
 
 		@Bean
 		public EndpointLocator zipkinEndpointLocator() {
-			return new DefaultEndpointLocator(null, this.serverProperties, this.environment,
-					this.zipkinProperties, this.inetUtils);
+			return new DefaultEndpointLocator(null, this.serverProperties,
+					this.environment, this.zipkinProperties, this.inetUtils);
 		}
 
 	}
@@ -159,25 +129,27 @@ public class ZipkinAutoConfiguration {
 	@ConditionalOnProperty(value = "spring.zipkin.locator.discovery.enabled", havingValue = "true")
 	protected static class RegistrationEndpointLocatorConfiguration {
 
-		@Autowired(required=false)
+		@Autowired(required = false)
 		private ServerProperties serverProperties;
 
 		@Autowired
 		private ZipkinProperties zipkinProperties;
 
-		@Autowired(required=false)
+		@Autowired(required = false)
 		private InetUtils inetUtils;
 
 		@Autowired
 		private Environment environment;
 
-		@Autowired(required=false)
+		@Autowired(required = false)
 		private Registration registration;
 
 		@Bean
 		public EndpointLocator zipkinEndpointLocator() {
-			return new DefaultEndpointLocator(this.registration, this.serverProperties, this.environment,
-							this.zipkinProperties, this.inetUtils);
+			return new DefaultEndpointLocator(this.registration, this.serverProperties,
+					this.environment, this.zipkinProperties, this.inetUtils);
 		}
+
 	}
+
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,8 @@ package org.springframework.cloud.sleuth.instrument.scheduling;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration properties for {@link org.springframework.scheduling.annotation.Scheduled} tracing
+ * Configuration properties for
+ * {@link org.springframework.scheduling.annotation.Scheduled} tracing.
  *
  * @author Arthur Gavlyukovskiy
  * @since 1.0.12
@@ -35,7 +36,7 @@ public class SleuthSchedulingProperties {
 	/**
 	 * Pattern for the fully qualified name of a class that should be skipped.
 	 */
-	private String skipPattern = "";
+	private String skipPattern = "org.springframework.cloud.netflix.hystrix.stream.HystrixStreamTask";
 
 	public boolean isEnabled() {
 		return this.enabled;
@@ -52,4 +53,5 @@ public class SleuthSchedulingProperties {
 	public void setSkipPattern(String skipPattern) {
 		this.skipPattern = skipPattern;
 	}
+
 }

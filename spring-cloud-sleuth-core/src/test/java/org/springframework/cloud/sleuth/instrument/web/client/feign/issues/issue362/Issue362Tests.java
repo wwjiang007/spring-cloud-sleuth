@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,18 +33,19 @@ import feign.Response;
 import feign.RetryableException;
 import feign.Retryer;
 import feign.codec.ErrorDecoder;
-import zipkin2.Span;
-import zipkin2.reporter.Reporter;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import zipkin2.Span;
+import zipkin2.reporter.Reporter;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.sleuth.instrument.web.TraceWebServletAutoConfiguration;
-import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.cloud.sleuth.instrument.web.TraceWebServletAutoConfiguration;
+import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpStatus;
@@ -59,20 +60,36 @@ import org.springframework.web.client.RestTemplate;
 import static org.assertj.core.api.Assertions.fail;
 import static org.assertj.core.api.BDDAssertions.then;
 
+@FeignClient(value = "myFeignClient", url = "http://localhost:9998", configuration = CustomConfig.class)
+interface MyFeignClient {
+
+	@RequestMapping("/service/ok")
+	String ok();
+
+	@RequestMapping("/service/not-ok")
+	String exp();
+
+}
+
 /**
  * @author Marcin Grzejszczak
  */
 @RunWith(SpringJUnit4ClassRunner.class)
-@SpringBootTest(classes = Application.class,
-		webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
-@TestPropertySource(properties = {"ribbon.eureka.enabled=false",
-		"feign.hystrix.enabled=false", "server.port=9998"})
+@SpringBootTest(classes = Application.class, webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+@TestPropertySource(properties = { "ribbon.eureka.enabled=false",
+		"feign.hystrix.enabled=false", "server.port=9998" })
 public class Issue362Tests {
 
 	RestTemplate template = new RestTemplate();
-	@Autowired FeignComponentAsserter feignComponentAsserter;
-	@Autowired Tracing tracer;
-	@Autowired ArrayListSpanReporter reporter;
+
+	@Autowired
+	FeignComponentAsserter feignComponentAsserter;
+
+	@Autowired
+	Tracing tracer;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
 
 	@Before
 	public void setup() {
@@ -84,10 +101,12 @@ public class Issue362Tests {
 	public void should_successfully_work_with_custom_error_decoder_when_sending_successful_request() {
 		String securedURl = "http://localhost:9998/sleuth/test-ok";
 
-		ResponseEntity<String> response = this.template.getForEntity(securedURl, String.class);
+		ResponseEntity<String> response = this.template.getForEntity(securedURl,
+				String.class);
 
 		then(response.getBody()).isEqualTo("I'm OK");
-		then(this.feignComponentAsserter.executedComponents).containsEntry(Client.class, true);
+		then(this.feignComponentAsserter.executedComponents).containsEntry(Client.class,
+				true);
 		List<Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).tags()).containsEntry("http.path", "/service/ok");
@@ -100,7 +119,9 @@ public class Issue362Tests {
 		try {
 			this.template.getForEntity(securedURl, String.class);
 			fail("should propagate an exception");
-		} catch (Exception e) { }
+		}
+		catch (Exception e) {
+		}
 
 		then(this.feignComponentAsserter.executedComponents)
 				.containsEntry(ErrorDecoder.class, true)
@@ -108,15 +129,15 @@ public class Issue362Tests {
 		List<Span> spans = this.reporter.getSpans();
 		// retries
 		then(spans).hasSize(5);
-		then(spans.stream().map(span -> span.tags().get("http.status_code")).collect(
-				Collectors.toList())).containsOnly("409");
+		then(spans.stream().map(span -> span.tags().get("http.status_code"))
+				.collect(Collectors.toList())).containsOnly("409");
 	}
+
 }
 
 @Configuration
 @EnableAutoConfiguration(exclude = TraceWebServletAutoConfiguration.class)
-@EnableFeignClients(basePackageClasses = {
-		SleuthTestController.class})
+@EnableFeignClients(basePackageClasses = { SleuthTestController.class })
 class Application {
 
 	@Bean
@@ -140,7 +161,9 @@ class Application {
 	}
 
 	@Bean
-	public FeignComponentAsserter testHolder() { return new FeignComponentAsserter(); }
+	public FeignComponentAsserter testHolder() {
+		return new FeignComponentAsserter();
+	}
 
 	@Bean
 	public Reporter<Span> spanReporter() {
@@ -150,15 +173,16 @@ class Application {
 }
 
 class FeignComponentAsserter {
+
 	Map<Class, Boolean> executedComponents = new ConcurrentHashMap<>();
+
 }
 
 @Configuration
 class CustomConfig {
 
 	@Bean
-	public ErrorDecoder errorDecoder(
-			FeignComponentAsserter feignComponentAsserter) {
+	public ErrorDecoder errorDecoder(FeignComponentAsserter feignComponentAsserter) {
 		return new CustomErrorDecoder(feignComponentAsserter);
 	}
 
@@ -167,12 +191,16 @@ class CustomConfig {
 		return new Retryer.Default();
 	}
 
+	@Bean
+	public Client client(FeignComponentAsserter feignComponentAsserter) {
+		return new CustomClient(feignComponentAsserter);
+	}
+
 	public static class CustomErrorDecoder extends ErrorDecoder.Default {
 
 		private final FeignComponentAsserter feignComponentAsserter;
 
-		public CustomErrorDecoder(
-				FeignComponentAsserter feignComponentAsserter) {
+		CustomErrorDecoder(FeignComponentAsserter feignComponentAsserter) {
 			this.feignComponentAsserter = feignComponentAsserter;
 		}
 
@@ -180,46 +208,34 @@ class CustomConfig {
 		public Exception decode(String methodKey, Response response) {
 			this.feignComponentAsserter.executedComponents.put(ErrorDecoder.class, true);
 			if (response.status() == 409) {
-				return new RetryableException("Article not Ready", new Date());
-			} else {
+				return new RetryableException("Article not Ready", Request.HttpMethod.GET,
+						new Date());
+			}
+			else {
 				return super.decode(methodKey, response);
 			}
 		}
-	}
 
-	@Bean
-	public Client client(
-			FeignComponentAsserter feignComponentAsserter) {
-		return new CustomClient(feignComponentAsserter);
 	}
 
 	public static class CustomClient extends Client.Default {
 
 		private final FeignComponentAsserter feignComponentAsserter;
 
-		public CustomClient(
-				FeignComponentAsserter feignComponentAsserter) {
+		CustomClient(FeignComponentAsserter feignComponentAsserter) {
 			super(null, null);
 			this.feignComponentAsserter = feignComponentAsserter;
 		}
 
-		@Override public Response execute(Request request, Request.Options options)
+		@Override
+		public Response execute(Request request, Request.Options options)
 				throws IOException {
 			this.feignComponentAsserter.executedComponents.put(Client.class, true);
 			return super.execute(request, options);
 		}
+
 	}
-}
 
-@FeignClient(value="myFeignClient", url="http://localhost:9998",
-		configuration = CustomConfig.class)
-interface MyFeignClient {
-
-	@RequestMapping("/service/ok")
-	String ok();
-
-	@RequestMapping("/service/not-ok")
-	String exp();
 }
 
 @RestController
@@ -236,6 +252,7 @@ class ServiceTestController {
 	public String notOk() throws InterruptedException, ExecutionException {
 		return "Not OK";
 	}
+
 }
 
 @RestController
@@ -247,11 +264,12 @@ class SleuthTestController {
 
 	@RequestMapping("/test-ok")
 	public String ok() throws InterruptedException, ExecutionException {
-		return myFeignClient.ok();
+		return this.myFeignClient.ok();
 	}
 
 	@RequestMapping("/test-not-ok")
 	public String notOk() throws InterruptedException, ExecutionException {
-		return myFeignClient.exp();
+		return this.myFeignClient.exp();
 	}
+
 }

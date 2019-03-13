@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,31 +28,37 @@ import java.util.concurrent.ThreadFactory;
 
 import brave.Tracer;
 import brave.Tracing;
-import brave.propagation.StrictCurrentTraceContext;
+import brave.propagation.StrictScopeDecorator;
+import brave.propagation.ThreadLocalCurrentTraceContext;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 import rx.functions.Action0;
 import rx.plugins.RxJavaErrorHandler;
 import rx.plugins.RxJavaObservableExecutionHook;
 import rx.plugins.RxJavaPlugins;
 import rx.plugins.RxJavaSchedulersHook;
-import org.junit.After;
-import org.junit.Before;
-import org.junit.Test;
+
 import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 
 import static org.assertj.core.api.BDDAssertions.then;
 
 /**
- *
  * @author Shivang Shah
  */
 public class SleuthRxJavaSchedulersHookTests {
 
+	private static StringBuilder caller;
+
 	List<String> threadsToIgnore = new ArrayList<>();
+
 	ArrayListSpanReporter reporter = new ArrayListSpanReporter();
+
 	Tracing tracing = Tracing.newBuilder()
-			.currentTraceContext(new StrictCurrentTraceContext())
-			.spanReporter(this.reporter)
-			.build();
+			.currentTraceContext(ThreadLocalCurrentTraceContext.newBuilder()
+					.addScopeDecorator(StrictScopeDecorator.create()).build())
+			.spanReporter(this.reporter).build();
+
 	Tracer tracer = this.tracing.tracer();
 
 	@After
@@ -60,7 +66,6 @@ public class SleuthRxJavaSchedulersHookTests {
 		this.tracing.close();
 		this.reporter.clear();
 	}
-	private static StringBuilder caller;
 
 	@Before
 	@After
@@ -72,19 +77,22 @@ public class SleuthRxJavaSchedulersHookTests {
 	@Test
 	public void should_not_override_existing_custom_hooks() {
 		RxJavaPlugins.getInstance().registerErrorHandler(new MyRxJavaErrorHandler());
-		RxJavaPlugins.getInstance().registerObservableExecutionHook(new MyRxJavaObservableExecutionHook());
+		RxJavaPlugins.getInstance()
+				.registerObservableExecutionHook(new MyRxJavaObservableExecutionHook());
 
-		new SleuthRxJavaSchedulersHook(this.tracer, threadsToIgnore);
+		new SleuthRxJavaSchedulersHook(this.tracer, this.threadsToIgnore);
 
-		then(RxJavaPlugins.getInstance().getErrorHandler()).isExactlyInstanceOf(MyRxJavaErrorHandler.class);
-		then(RxJavaPlugins.getInstance().getObservableExecutionHook()).isExactlyInstanceOf(MyRxJavaObservableExecutionHook.class);
+		then(RxJavaPlugins.getInstance().getErrorHandler())
+				.isExactlyInstanceOf(MyRxJavaErrorHandler.class);
+		then(RxJavaPlugins.getInstance().getObservableExecutionHook())
+				.isExactlyInstanceOf(MyRxJavaObservableExecutionHook.class);
 	}
 
 	@Test
 	public void should_wrap_delegates_action_in_wrapped_action_when_delegate_is_present_on_schedule() {
 		RxJavaPlugins.getInstance().registerSchedulersHook(new MyRxJavaSchedulersHook());
 		SleuthRxJavaSchedulersHook schedulersHook = new SleuthRxJavaSchedulersHook(
-			this.tracer, this.threadsToIgnore);
+				this.tracer, this.threadsToIgnore);
 		Action0 action = schedulersHook.onSchedule(() -> {
 			caller = new StringBuilder("hello");
 		});
@@ -103,7 +111,7 @@ public class SleuthRxJavaSchedulersHookTests {
 		String threadNameToIgnore = "^MyCustomThread.*$";
 		RxJavaPlugins.getInstance().registerSchedulersHook(new MyRxJavaSchedulersHook());
 		SleuthRxJavaSchedulersHook schedulersHook = new SleuthRxJavaSchedulersHook(
-			this.tracer, Collections.singletonList(threadNameToIgnore));
+				this.tracer, Collections.singletonList(threadNameToIgnore));
 		Future<Void> hello = executorService().submit((Callable<Void>) () -> {
 			Action0 action = schedulersHook.onSchedule(() -> {
 				caller = new StringBuilder("hello");
@@ -124,11 +132,11 @@ public class SleuthRxJavaSchedulersHookTests {
 			thread.setName("MyCustomThread10");
 			return thread;
 		};
-		return Executors
-				.newSingleThreadExecutor(threadFactory);
+		return Executors.newSingleThreadExecutor(threadFactory);
 	}
 
 	static class MyRxJavaObservableExecutionHook extends RxJavaObservableExecutionHook {
+
 	}
 
 	static class MyRxJavaSchedulersHook extends RxJavaSchedulersHook {
@@ -139,8 +147,11 @@ public class SleuthRxJavaSchedulersHookTests {
 				caller = new StringBuilder("called_from_schedulers_hook");
 			};
 		}
+
 	}
 
 	static class MyRxJavaErrorHandler extends RxJavaErrorHandler {
+
 	}
+
 }

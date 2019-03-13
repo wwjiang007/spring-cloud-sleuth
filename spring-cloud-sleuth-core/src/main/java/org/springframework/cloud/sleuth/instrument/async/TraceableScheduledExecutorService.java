@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,14 +25,16 @@ import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.BeanFactory;
 
 /**
- * A decorator class for {@link ScheduledExecutorService} to support tracing in Executors
+ * A decorator class for {@link ScheduledExecutorService} to support tracing in Executors.
  *
  * @author Gaurav Rai Mazra
  * @since 1.0.0
  */
-public class TraceableScheduledExecutorService extends TraceableExecutorService implements ScheduledExecutorService {
+public class TraceableScheduledExecutorService extends TraceableExecutorService
+		implements ScheduledExecutorService {
 
-	public TraceableScheduledExecutorService(BeanFactory beanFactory, final ExecutorService delegate) {
+	public TraceableScheduledExecutorService(BeanFactory beanFactory,
+			final ExecutorService delegate) {
 		super(beanFactory, delegate);
 	}
 
@@ -42,26 +44,37 @@ public class TraceableScheduledExecutorService extends TraceableExecutorService 
 
 	@Override
 	public ScheduledFuture<?> schedule(Runnable command, long delay, TimeUnit unit) {
-		Runnable r = new TraceRunnable(tracing(), spanNamer(), command);
-		return getScheduledExecutorService().schedule(r, delay, unit);
+		return getScheduledExecutorService().schedule(
+				ContextUtil.isContextInCreation(this.beanFactory) ? command
+						: new TraceRunnable(tracing(), spanNamer(), command),
+				delay, unit);
 	}
 
 	@Override
-	public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay, TimeUnit unit) {
-		Callable<V> c = new TraceCallable<>(tracing(), spanNamer(), callable);
-		return getScheduledExecutorService().schedule(c, delay, unit);
+	public <V> ScheduledFuture<V> schedule(Callable<V> callable, long delay,
+			TimeUnit unit) {
+		return getScheduledExecutorService().schedule(
+				ContextUtil.isContextInCreation(this.beanFactory) ? callable
+						: new TraceCallable<>(tracing(), spanNamer(), callable),
+				delay, unit);
 	}
 
 	@Override
-	public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay, long period, TimeUnit unit) {
-		Runnable r = new TraceRunnable(tracing(), spanNamer(), command);
-		return getScheduledExecutorService().scheduleAtFixedRate(r, initialDelay, period, unit);
+	public ScheduledFuture<?> scheduleAtFixedRate(Runnable command, long initialDelay,
+			long period, TimeUnit unit) {
+		return getScheduledExecutorService().scheduleAtFixedRate(
+				ContextUtil.isContextInCreation(this.beanFactory) ? command
+						: new TraceRunnable(tracing(), spanNamer(), command),
+				initialDelay, period, unit);
 	}
 
 	@Override
-	public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay, long delay, TimeUnit unit) {
-		Runnable r = new TraceRunnable(tracing(), spanNamer(), command);
-		return getScheduledExecutorService().scheduleWithFixedDelay(r, initialDelay, delay, unit);
+	public ScheduledFuture<?> scheduleWithFixedDelay(Runnable command, long initialDelay,
+			long delay, TimeUnit unit) {
+		return getScheduledExecutorService().scheduleWithFixedDelay(
+				ContextUtil.isContextInCreation(this.beanFactory) ? command
+						: new TraceRunnable(tracing(), spanNamer(), command),
+				initialDelay, delay, unit);
 	}
 
 }

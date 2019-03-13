@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,11 +19,17 @@ package org.springframework.cloud.sleuth.instrument.web;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
+ * Legacy HTTP Sleuth properties.
+ *
  * @author Marcin Grzejszczak
  * @since 2.0.0
  */
 @ConfigurationProperties("spring.sleuth.http.legacy")
 public class SleuthHttpLegacyProperties {
+
+	/**
+	 * Enables the legacy Sleuth setup.
+	 */
 	private boolean enabled;
 
 	public boolean isEnabled() {
@@ -33,4 +39,5 @@ public class SleuthHttpLegacyProperties {
 	public void setEnabled(boolean enabled) {
 		this.enabled = enabled;
 	}
+
 }

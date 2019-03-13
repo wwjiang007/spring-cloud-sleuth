@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,9 +20,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import brave.sampler.Sampler;
+import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
 import org.junit.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -40,28 +42,36 @@ import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
-import com.netflix.hystrix.contrib.javanica.annotation.HystrixCommand;
+@FeignClient("participants")
+interface ParticipantsClient {
+
+	@RequestMapping(method = RequestMethod.GET, value = "/races/{raceId}")
+	List<Object> getParticipants(@PathVariable("raceId") String raceId);
+
+}
 
 public class Issue307Tests {
 
 	@Test
 	public void should_start_context() {
-		try (ConfigurableApplicationContext applicationContext = SpringApplication
-				.run(SleuthSampleApplication.class, "--spring.jmx.enabled=false", "--server.port=0")) {
+		try (ConfigurableApplicationContext applicationContext = SpringApplication.run(
+				SleuthSampleApplication.class, "--spring.jmx.enabled=false",
+				"--server.port=0")) {
+			// code
 		}
 	}
+
 }
 
 @EnableAutoConfiguration
-@Import({
-		ParticipantsBean.class, ParticipantsClient.class})
+@Import({ ParticipantsBean.class })
 @RestController
 @EnableFeignClients
 @EnableCircuitBreaker
 class SleuthSampleApplication {
 
-	private static final Logger LOG = LoggerFactory.getLogger(
-			SleuthSampleApplication.class.getName());
+	private static final Logger LOG = LoggerFactory
+			.getLogger(SleuthSampleApplication.class.getName());
 
 	@Autowired
 	private RestTemplate restTemplate;
@@ -91,33 +101,28 @@ class SleuthSampleApplication {
 	@RequestMapping("/callhome")
 	public String callHome() {
 		LOG.info("calling home");
-		return restTemplate.getForObject("http://localhost:" + port(), String.class);
+		return this.restTemplate.getForObject("http://localhost:" + port(), String.class);
 	}
 
 	private int port() {
 		return this.environment.getProperty("local.server.port", Integer.class);
 	}
+
 }
 
 @Component
 class ParticipantsBean {
+
 	@Autowired
 	private ParticipantsClient participantsClient;
 
 	@HystrixCommand(fallbackMethod = "defaultParticipants")
 	public List<Object> getParticipants(String raceId) {
-		return participantsClient.getParticipants(raceId);
+		return this.participantsClient.getParticipants(raceId);
 	}
 
 	public List<Object> defaultParticipants(String raceId) {
 		return new ArrayList<>();
 	}
-}
-
-@FeignClient("participants")
-interface ParticipantsClient {
-
-	@RequestMapping(method = RequestMethod.GET, value="/races/{raceId}")
-	List<Object> getParticipants(@PathVariable("raceId") String raceId);
 
 }

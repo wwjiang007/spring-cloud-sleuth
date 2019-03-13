@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,6 +20,7 @@ import brave.http.HttpTracing;
 import feign.Client;
 import feign.Feign;
 import feign.okhttp.OkHttpClient;
+
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.AutoConfigureBefore;
@@ -47,12 +48,14 @@ import org.springframework.context.annotation.Scope;
 @ConditionalOnClass({ Client.class, FeignContext.class })
 @ConditionalOnBean(HttpTracing.class)
 @AutoConfigureBefore(FeignAutoConfiguration.class)
-@AutoConfigureAfter({SleuthHystrixAutoConfiguration.class, TraceHttpAutoConfiguration.class})
+@AutoConfigureAfter({ SleuthHystrixAutoConfiguration.class,
+		TraceHttpAutoConfiguration.class })
 public class TraceFeignClientAutoConfiguration {
 
 	@Bean
 	@Scope("prototype")
-	@ConditionalOnClass(name = {"com.netflix.hystrix.HystrixCommand", "feign.hystrix.HystrixFeign"})
+	@ConditionalOnClass(name = { "com.netflix.hystrix.HystrixCommand",
+			"feign.hystrix.HystrixFeign" })
 	@ConditionalOnProperty(name = "feign.hystrix.enabled", havingValue = "true")
 	Feign.Builder feignHystrixBuilder(BeanFactory beanFactory) {
 		return SleuthHystrixFeignBuilder.builder(beanFactory);
@@ -66,30 +69,38 @@ public class TraceFeignClientAutoConfiguration {
 		return SleuthFeignBuilder.builder(beanFactory);
 	}
 
+	@Bean
+	TraceFeignObjectWrapper traceFeignObjectWrapper(BeanFactory beanFactory) {
+		return new TraceFeignObjectWrapper(beanFactory);
+	}
+
+	@Bean
+	TraceFeignAspect traceFeignAspect(BeanFactory beanFactory) {
+		return new TraceFeignAspect(beanFactory);
+	}
+
 	@Configuration
 	@ConditionalOnProperty(name = "spring.sleuth.feign.processor.enabled", matchIfMissing = true)
 	protected static class FeignBeanPostProcessorConfiguration {
 
-		@Bean static FeignContextBeanPostProcessor feignContextBeanPostProcessor(BeanFactory beanFactory) {
+		@Bean
+		static FeignContextBeanPostProcessor feignContextBeanPostProcessor(
+				BeanFactory beanFactory) {
 			return new FeignContextBeanPostProcessor(beanFactory);
 		}
+
 	}
 
 	@Configuration
 	@ConditionalOnClass(OkHttpClient.class)
 	protected static class OkHttpClientFeignBeanPostProcessorConfiguration {
 
-		@Bean static OkHttpFeignClientBeanPostProcessor okHttpFeignClientBeanPostProcessor(BeanFactory beanFactory) {
+		@Bean
+		static OkHttpFeignClientBeanPostProcessor okHttpFeignClientBeanPostProcessor(
+				BeanFactory beanFactory) {
 			return new OkHttpFeignClientBeanPostProcessor(beanFactory);
 		}
+
 	}
 
-	@Bean
-	TraceFeignObjectWrapper traceFeignObjectWrapper(BeanFactory beanFactory) {
-		return new TraceFeignObjectWrapper(beanFactory);
-	}
-
-	@Bean TraceFeignAspect traceFeignAspect(BeanFactory beanFactory) {
-		return new TraceFeignAspect(beanFactory);
-	}
 }

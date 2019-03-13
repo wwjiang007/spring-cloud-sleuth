@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.cloud.sleuth.instrument.messaging;
 import brave.Tracing;
 import org.junit.After;
 import org.junit.Test;
+
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -26,13 +27,8 @@ import org.springframework.messaging.support.ChannelInterceptor;
 
 public class TracingChannelInterceptorAutowireTest {
 
-	@Configuration static class TracingConfiguration {
-		@Bean Tracing tracing() {
-			return Tracing.newBuilder().build();
-		}
-	}
-
-	@Test public void autowiredWithBeanConfig() {
+	@Test
+	public void autowiredWithBeanConfig() {
 		AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
 		ctx.register(TracingConfiguration.class);
 		ctx.register(TracingChannelInterceptor.class);
@@ -41,7 +37,19 @@ public class TracingChannelInterceptorAutowireTest {
 		ctx.getBean(ChannelInterceptor.class);
 	}
 
-	@After public void close() {
+	@After
+	public void close() {
 		Tracing.current().close();
 	}
+
+	@Configuration
+	static class TracingConfiguration {
+
+		@Bean
+		Tracing tracing() {
+			return Tracing.newBuilder().build();
+		}
+
+	}
+
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,46 +18,57 @@ package org.springframework.cloud.sleuth.instrument.reactor;
 
 import java.util.function.Supplier;
 
+import brave.Span;
 import brave.Tracing;
-import reactor.util.context.Context;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Subscriber;
+import reactor.util.context.Context;
+
 import org.springframework.beans.factory.BeanFactory;
 
 /**
- * Supplier to lazily start a {@link SpanSubscription}
+ * Supplier to lazily start a {@link SpanSubscription}.
  *
+ * @param <T> type of returned subscription
  * @author Marcin Grzejszczak
  */
-class SpanSubscriptionProvider<T> implements Supplier<SpanSubscription<T>> {
+final class SpanSubscriptionProvider<T> implements Supplier<SpanSubscription<T>> {
 
 	private static final Log log = LogFactory.getLog(SpanSubscriptionProvider.class);
 
 	final BeanFactory beanFactory;
-	final Subscriber<? super T> subscriber;
-	final Context context;
-	final String name;
-	private Tracing tracing;
 
-	SpanSubscriptionProvider(BeanFactory beanFactory,
-			Subscriber<? super T> subscriber,
+	final Subscriber<? super T> subscriber;
+
+	final Context context;
+
+	final String name;
+
+	private volatile Tracing tracing;
+
+	SpanSubscriptionProvider(BeanFactory beanFactory, Subscriber<? super T> subscriber,
 			Context context, String name) {
 		this.beanFactory = beanFactory;
 		this.subscriber = subscriber;
 		this.context = context;
 		this.name = name;
 		if (log.isTraceEnabled()) {
-			log.trace("Context [" + context + "], name [" + name + "]");
+			log.trace("Spring context [" + beanFactory + "], Reactor context [" + context
+					+ "], name [" + name + "]");
 		}
 	}
 
-	@Override public SpanSubscription<T> get() {
+	@Override
+	public SpanSubscription<T> get() {
 		return newCoreSubscriber(tracing());
 	}
 
 	SpanSubscription<T> newCoreSubscriber(Tracing tracing) {
-		return new SpanSubscriber<>(this.subscriber, this.context, tracing, this.name);
+		Span root = this.context.hasKey(Span.class) ? this.context.get(Span.class)
+				: tracing.tracer().currentSpan();
+		return new ScopePassingSpanSubscriber<>(this.subscriber, this.context, tracing,
+				root);
 	}
 
 	private Tracing tracing() {
@@ -66,4 +77,5 @@ class SpanSubscriptionProvider<T> implements Supplier<SpanSubscription<T>> {
 		}
 		return this.tracing;
 	}
+
 }

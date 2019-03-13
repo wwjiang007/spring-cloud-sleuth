@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,6 +25,8 @@ import java.lang.annotation.Target;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 
 /**
+ * Verifies if messaging property was enabled.
+ *
  * @author Marcin Grzejszczak
  * @since 2.0.0
  */
@@ -33,4 +35,5 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 @Documented
 @ConditionalOnProperty(value = "spring.sleuth.messaging.enabled", matchIfMissing = true)
 @interface OnMessagingEnabled {
+
 }

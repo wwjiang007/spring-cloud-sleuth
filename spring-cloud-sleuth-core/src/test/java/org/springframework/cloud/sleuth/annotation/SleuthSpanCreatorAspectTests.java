@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,42 +16,49 @@
 
 package org.springframework.cloud.sleuth.annotation;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
 import brave.Span;
 import brave.Tracer;
-import brave.Tracing;
 import brave.sampler.Sampler;
-import zipkin2.Annotation;
-import zipkin2.reporter.Reporter;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import zipkin2.Annotation;
+import zipkin2.reporter.Reporter;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
 import static org.assertj.core.api.BDDAssertions.then;
+import static org.springframework.test.annotation.DirtiesContext.MethodMode.BEFORE_METHOD;
 
 @SpringBootTest(classes = SleuthSpanCreatorAspectTests.TestConfiguration.class)
 @RunWith(SpringJUnit4ClassRunner.class)
+@DirtiesContext(methodMode = BEFORE_METHOD)
 public class SleuthSpanCreatorAspectTests {
-	
-	@Autowired TestBeanInterface testBean;
-	@Autowired Tracer tracer;
-	@Autowired ArrayListSpanReporter reporter;
-	
+
+	@Autowired
+	TestBeanInterface testBean;
+
+	@Autowired
+	Tracer tracer;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
+
 	@Before
 	public void setup() {
 		this.reporter.clear();
 	}
-	
+
 	@Test
 	public void shouldCreateSpanWhenAnnotationOnInterfaceMethod() {
 		this.testBean.testMethod();
@@ -60,8 +67,9 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("test-method");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
-	
+
 	@Test
 	public void shouldCreateSpanWhenAnnotationOnClassMethod() {
 		this.testBean.testMethod2();
@@ -70,8 +78,9 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("test-method2");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
-	
+
 	@Test
 	public void shouldCreateSpanWithCustomNameWhenAnnotationOnClassMethod() {
 		this.testBean.testMethod3();
@@ -80,8 +89,9 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("custom-name-on-test-method3");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
-	
+
 	@Test
 	public void shouldCreateSpanWithCustomNameWhenAnnotationOnInterfaceMethod() {
 		this.testBean.testMethod4();
@@ -90,8 +100,9 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("custom-name-on-test-method4");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
-	
+
 	@Test
 	public void shouldCreateSpanWithTagWhenAnnotationOnInterfaceMethod() {
 		// tag::execution[]
@@ -103,8 +114,9 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans.get(0).name()).isEqualTo("custom-name-on-test-method5");
 		then(spans.get(0).tags()).containsEntry("testTag", "test");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
-	
+
 	@Test
 	public void shouldCreateSpanWithTagWhenAnnotationOnClassMethod() {
 		this.testBean.testMethod6("test");
@@ -114,6 +126,7 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans.get(0).name()).isEqualTo("custom-name-on-test-method6");
 		then(spans.get(0).tags()).containsEntry("testTag6", "test");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
@@ -124,6 +137,7 @@ public class SleuthSpanCreatorAspectTests {
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("custom-name-on-test-method8");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
@@ -133,10 +147,10 @@ public class SleuthSpanCreatorAspectTests {
 		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("custom-name-on-test-method9");
-		then(spans.get(0).tags())
-				.containsEntry("class", "TestBean")
+		then(spans.get(0).tags()).containsEntry("class", "TestBean")
 				.containsEntry("method", "testMethod9");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
@@ -145,19 +159,35 @@ public class SleuthSpanCreatorAspectTests {
 
 		try (Tracer.SpanInScope ws = this.tracer.withSpanInScope(span.start())) {
 			this.testBean.testMethod10("test");
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
-		List<zipkin2.Span> spans = new ArrayList<>(this.reporter.getSpans());
+		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("foo");
-		then(spans.get(0).tags())
-				.containsEntry("customTestTag10", "test");
-		then(spans.get(0).annotations()
-				.stream().map(Annotation::value).collect(Collectors.toList()))
-				.contains("customTest.before", "customTest.after");
+		then(spans.get(0).tags()).containsEntry("customTestTag10", "test");
+		then(spans.get(0).annotations().stream().map(Annotation::value)
+				.collect(Collectors.toList())).contains("customTest.before",
+						"customTest.after");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
+	}
+
+	@Test
+	public void shouldStartAndCloseSpanOnContinueSpanIfSpanNotSet() {
+		this.testBean.testMethod10("test");
+
+		List<zipkin2.Span> spans = this.reporter.getSpans();
+		then(spans).hasSize(1);
+		then(spans.get(0).name()).isEqualTo("test-method10");
+		then(spans.get(0).tags()).containsEntry("customTestTag10", "test");
+		then(spans.get(0).annotations().stream().map(Annotation::value)
+				.collect(Collectors.toList())).contains("customTest.before",
+						"customTest.after");
+		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
@@ -166,19 +196,20 @@ public class SleuthSpanCreatorAspectTests {
 
 		try (Tracer.SpanInScope ws = this.tracer.withSpanInScope(span.start())) {
 			this.testBean.testMethod10_v2("test");
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
-		List<zipkin2.Span> spans = new ArrayList<>(this.reporter.getSpans());
+		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("foo");
-		then(spans.get(0).tags())
-				.containsEntry("customTestTag10", "test");
-		then(spans.get(0).annotations()
-				.stream().map(Annotation::value).collect(Collectors.toList()))
-				.contains("customTest.before", "customTest.after");
+		then(spans.get(0).tags()).containsEntry("customTestTag10", "test");
+		then(spans.get(0).annotations().stream().map(Annotation::value)
+				.collect(Collectors.toList())).contains("customTest.before",
+						"customTest.after");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
@@ -189,37 +220,39 @@ public class SleuthSpanCreatorAspectTests {
 			// tag::continue_span_execution[]
 			this.testBean.testMethod11("test");
 			// end::continue_span_execution[]
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
-		List<zipkin2.Span> spans = new ArrayList<>(this.reporter.getSpans());
+		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("foo");
-		then(spans.get(0).tags())
-				.containsEntry("class", "TestBean")
+		then(spans.get(0).tags()).containsEntry("class", "TestBean")
 				.containsEntry("method", "testMethod11")
 				.containsEntry("customTestTag11", "test");
-		then(spans.get(0).annotations()
-				.stream().map(Annotation::value).collect(Collectors.toList()))
-				.contains("customTest.before", "customTest.after");
+		then(spans.get(0).annotations().stream().map(Annotation::value)
+				.collect(Collectors.toList())).contains("customTest.before",
+						"customTest.after");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
 	public void shouldAddErrorTagWhenExceptionOccurredInNewSpan() {
 		try {
 			this.testBean.testMethod12("test");
-		} catch (RuntimeException ignored) {
+		}
+		catch (RuntimeException ignored) {
 		}
 
-		List<zipkin2.Span> spans = new ArrayList<>(this.reporter.getSpans());
+		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("test-method12");
-		then(spans.get(0).tags())
-				.containsEntry("testTag12", "test")
+		then(spans.get(0).tags()).containsEntry("testTag12", "test")
 				.containsEntry("error", "test exception 12");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
@@ -230,38 +263,40 @@ public class SleuthSpanCreatorAspectTests {
 			// tag::continue_span_execution[]
 			this.testBean.testMethod13();
 			// end::continue_span_execution[]
-		} catch (RuntimeException ignored) {
-		} finally {
+		}
+		catch (RuntimeException ignored) {
+		}
+		finally {
 			span.finish();
 		}
 
-		List<zipkin2.Span> spans = new ArrayList<>(this.reporter.getSpans());
+		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		then(spans.get(0).name()).isEqualTo("foo");
-		then(spans.get(0).tags())
-				.containsEntry("error", "test exception 13");
-		then(spans.get(0).annotations()
-				.stream().map(Annotation::value).collect(Collectors.toList()))
-				.contains("testMethod13.before", "testMethod13.afterFailure",
-						"testMethod13.after");
+		then(spans.get(0).tags()).containsEntry("error", "test exception 13");
+		then(spans.get(0).annotations().stream().map(Annotation::value)
+				.collect(Collectors.toList())).contains("testMethod13.before",
+						"testMethod13.afterFailure", "testMethod13.after");
 		then(spans.get(0).duration()).isNotZero();
+		then(this.tracer.currentSpan()).isNull();
 	}
 
 	@Test
 	public void shouldNotCreateSpanWhenNotAnnotated() {
 		this.testBean.testMethod7();
 
-		List<zipkin2.Span> spans = new ArrayList<>(this.reporter.getSpans());
+		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).isEmpty();
+		then(this.tracer.currentSpan()).isNull();
 	}
-	
+
 	protected interface TestBeanInterface {
 
 		// tag::annotated_method[]
 		@NewSpan
 		void testMethod();
 		// end::annotated_method[]
-		
+
 		void testMethod2();
 
 		@NewSpan(name = "interfaceCustomNameOnTestMethod3")
@@ -278,7 +313,7 @@ public class SleuthSpanCreatorAspectTests {
 		// end::custom_name_and_tag_on_annotated_method[]
 
 		void testMethod6(String test);
-		
+
 		void testMethod7();
 
 		@NewSpan(name = "customNameOnTestMethod8")
@@ -288,10 +323,10 @@ public class SleuthSpanCreatorAspectTests {
 		void testMethod9(String param);
 
 		@ContinueSpan(log = "customTest")
-		void testMethod10(@SpanTag(value = "testTag10") String param);
+		void testMethod10(@SpanTag("testTag10") String param);
 
 		@ContinueSpan(log = "customTest")
-		void testMethod10_v2(@SpanTag(key = "testTag10") String param);
+		void testMethod10_v2(@SpanTag("testTag10") String param);
 
 		// tag::continue_span[]
 		@ContinueSpan(log = "testMethod11")
@@ -303,8 +338,9 @@ public class SleuthSpanCreatorAspectTests {
 
 		@ContinueSpan(log = "testMethod13")
 		void testMethod13();
+
 	}
-	
+
 	protected static class TestBean implements TestBeanInterface {
 
 		@Override
@@ -326,7 +362,7 @@ public class SleuthSpanCreatorAspectTests {
 		@Override
 		public void testMethod4() {
 		}
-		
+
 		@Override
 		public void testMethod5(String test) {
 		}
@@ -334,7 +370,7 @@ public class SleuthSpanCreatorAspectTests {
 		@NewSpan(name = "customNameOnTestMethod6")
 		@Override
 		public void testMethod6(@SpanTag("testTag6") String test) {
-			
+
 		}
 
 		@Override
@@ -353,7 +389,7 @@ public class SleuthSpanCreatorAspectTests {
 		}
 
 		@Override
-		public void testMethod10(@SpanTag(value = "customTestTag10") String param) {
+		public void testMethod10(@SpanTag("customTestTag10") String param) {
 
 		}
 
@@ -377,8 +413,9 @@ public class SleuthSpanCreatorAspectTests {
 		public void testMethod13() {
 			throw new RuntimeException("test exception 13");
 		}
+
 	}
-	
+
 	@Configuration
 	@EnableAutoConfiguration
 	protected static class TestConfiguration {
@@ -388,12 +425,16 @@ public class SleuthSpanCreatorAspectTests {
 			return new TestBean();
 		}
 
-		@Bean Reporter<zipkin2.Span> spanReporter() {
+		@Bean
+		Reporter<zipkin2.Span> spanReporter() {
 			return new ArrayListSpanReporter();
 		}
 
-		@Bean Sampler alwaysSampler() {
+		@Bean
+		Sampler alwaysSampler() {
 			return Sampler.ALWAYS_SAMPLE;
 		}
+
 	}
+
 }

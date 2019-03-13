@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,17 +26,18 @@ import brave.sampler.Sampler;
 import feign.Client;
 import feign.Request;
 import feign.Response;
-import zipkin2.Span;
-import zipkin2.reporter.Reporter;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import zipkin2.Span;
+import zipkin2.reporter.Reporter;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -45,19 +46,33 @@ import org.springframework.web.bind.annotation.RequestMethod;
 
 import static org.assertj.core.api.BDDAssertions.then;
 
+@FeignClient(name = "foo", url = "http://non.existing.url")
+interface MyNameRemote {
+
+	@RequestMapping(value = "/", method = RequestMethod.GET)
+	String get();
+
+}
+
 /**
  * @author Marcin Grzejszczak
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = Application.class,
-		webEnvironment = SpringBootTest.WebEnvironment.NONE,
-		properties = {"feign.hystrix.enabled=false"})
+@SpringBootTest(classes = Application.class, webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
+		"feign.hystrix.enabled=false" })
 public class Issue502Tests {
 
-	@Autowired MyClient myClient;
-	@Autowired MyNameRemote myNameRemote;
-	@Autowired ArrayListSpanReporter reporter;
-	@Autowired Tracing tracer;
+	@Autowired
+	MyClient myClient;
+
+	@Autowired
+	MyNameRemote myNameRemote;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
+
+	@Autowired
+	Tracing tracer;
 
 	@Before
 	public void open() {
@@ -75,6 +90,7 @@ public class Issue502Tests {
 		then(spans).hasSize(1);
 		then(spans.get(0).tags().get("http.path")).isEqualTo("/");
 	}
+
 }
 
 @Configuration
@@ -99,28 +115,21 @@ class Application {
 
 }
 
-@FeignClient(name="foo",
-		url="http://non.existing.url")
-interface MyNameRemote {
-
-	@RequestMapping(value = "/", method = RequestMethod.GET)
-	String get();
-}
-
 class MyClient implements Client {
 
 	boolean wasCalled;
 
-	@Override public Response execute(Request request, Request.Options options)
-			throws IOException {
+	@Override
+	public Response execute(Request request, Request.Options options) throws IOException {
 		this.wasCalled = true;
-		return Response.builder()
-				.body("foo", Charset.forName("UTF-8"))
-				.headers(new HashMap<>())
-				.status(200).build();
+		return Response.builder().body("foo", Charset.forName("UTF-8"))
+				.request(Request.create(Request.HttpMethod.POST, "/foo", new HashMap<>(),
+						Request.Body.empty()))
+				.headers(new HashMap<>()).status(200).build();
 	}
 
 	boolean wasCalled() {
 		return this.wasCalled;
 	}
+
 }

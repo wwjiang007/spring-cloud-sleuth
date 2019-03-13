@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.springframework.cloud.sleuth.instrument.zuul;
 
 import java.util.List;
+
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -25,7 +26,8 @@ import brave.Span;
 import brave.Tracer;
 import brave.Tracing;
 import brave.http.HttpTracing;
-import brave.propagation.StrictCurrentTraceContext;
+import brave.propagation.StrictScopeDecorator;
+import brave.propagation.ThreadLocalCurrentTraceContext;
 import com.netflix.zuul.context.RequestContext;
 import com.netflix.zuul.monitoring.TracerFactory;
 import org.junit.After;
@@ -35,6 +37,7 @@ import org.junit.runner.RunWith;
 import org.mockito.BDDMockito;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+
 import org.springframework.cloud.netflix.zuul.metrics.EmptyTracerFactory;
 import org.springframework.cloud.sleuth.instrument.web.SleuthHttpParserAccessor;
 import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
@@ -48,20 +51,26 @@ import static org.assertj.core.api.BDDAssertions.then;
 @RunWith(MockitoJUnitRunner.class)
 public class TracePostZuulFilterTests {
 
-	@Mock HttpServletRequest httpServletRequest;
-	@Mock HttpServletResponse httpServletResponse;
+	@Mock
+	HttpServletRequest httpServletRequest;
+
+	@Mock
+	HttpServletResponse httpServletResponse;
 
 	ArrayListSpanReporter reporter = new ArrayListSpanReporter();
+
 	Tracing tracing = Tracing.newBuilder()
-			.currentTraceContext(new StrictCurrentTraceContext())
-			.spanReporter(this.reporter)
-			.build();
+			.currentTraceContext(ThreadLocalCurrentTraceContext.newBuilder()
+					.addScopeDecorator(StrictScopeDecorator.create()).build())
+			.spanReporter(this.reporter).build();
+
 	HttpTracing httpTracing = HttpTracing.newBuilder(this.tracing)
 			.clientParser(SleuthHttpParserAccessor.getClient())
-			.serverParser(SleuthHttpParserAccessor.getServer(new ErrorParser()))
-			.build();
-	private TracePostZuulFilter filter = new TracePostZuulFilter(this.httpTracing);
+			.serverParser(SleuthHttpParserAccessor.getServer(new ErrorParser())).build();
+
 	RequestContext requestContext = new RequestContext();
+
+	private TracePostZuulFilter filter = new TracePostZuulFilter(this.httpTracing);
 
 	@After
 	public void clean() {
@@ -100,16 +109,17 @@ public class TracePostZuulFilterTests {
 
 		try (Tracer.SpanInScope ws = this.tracing.tracer().withSpanInScope(span)) {
 			this.filter.runFilter();
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
 		List<zipkin2.Span> spans = this.reporter.getSpans();
 		then(spans).hasSize(1);
 		// initial span
-		then(spans.get(0).tags())
-				.containsEntry("http.status_code", "456");
+		then(spans.get(0).tags()).containsEntry("http.status_code", "456");
 		then(spans.get(0).name()).isEqualTo("http:start");
 		then(this.tracing.tracer().currentSpan()).isNull();
 	}
+
 }

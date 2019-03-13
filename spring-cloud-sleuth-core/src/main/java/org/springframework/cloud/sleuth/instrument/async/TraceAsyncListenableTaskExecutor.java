@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,21 +20,23 @@ import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 
 import brave.Tracing;
+
 import org.springframework.core.task.AsyncListenableTaskExecutor;
 import org.springframework.util.concurrent.ListenableFuture;
 
 /**
- * AsyncListenableTaskExecutor that wraps all Runnable / Callable tasks into
- * their trace related representation
+ * AsyncListenableTaskExecutor that wraps all Runnable / Callable tasks into their trace
+ * related representation.
  *
+ * @author Marcin Grzejszczak
  * @since 1.0.0
- *
  * @see brave.propagation.CurrentTraceContext#wrap(Runnable)
  * @see brave.propagation.CurrentTraceContext#wrap(Callable)
  */
 public class TraceAsyncListenableTaskExecutor implements AsyncListenableTaskExecutor {
 
 	private final AsyncListenableTaskExecutor delegate;
+
 	private final Tracing tracing;
 
 	TraceAsyncListenableTaskExecutor(AsyncListenableTaskExecutor delegate,
@@ -45,17 +47,20 @@ public class TraceAsyncListenableTaskExecutor implements AsyncListenableTaskExec
 
 	@Override
 	public ListenableFuture<?> submitListenable(Runnable task) {
-		return this.delegate.submitListenable(this.tracing.currentTraceContext().wrap(task));
+		return this.delegate
+				.submitListenable(this.tracing.currentTraceContext().wrap(task));
 	}
 
 	@Override
 	public <T> ListenableFuture<T> submitListenable(Callable<T> task) {
-		return this.delegate.submitListenable(this.tracing.currentTraceContext().wrap(task));
+		return this.delegate
+				.submitListenable(this.tracing.currentTraceContext().wrap(task));
 	}
 
 	@Override
 	public void execute(Runnable task, long startTimeout) {
-		this.delegate.execute(this.tracing.currentTraceContext().wrap(task), startTimeout);
+		this.delegate.execute(this.tracing.currentTraceContext().wrap(task),
+				startTimeout);
 	}
 
 	@Override

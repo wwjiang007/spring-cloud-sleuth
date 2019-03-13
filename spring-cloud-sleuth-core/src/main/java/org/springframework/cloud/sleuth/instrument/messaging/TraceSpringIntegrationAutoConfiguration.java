@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,15 +17,20 @@
 package org.springframework.cloud.sleuth.instrument.messaging;
 
 import brave.Tracing;
+import brave.propagation.Propagation;
+
 import org.springframework.boot.autoconfigure.AutoConfigureAfter;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.cloud.sleuth.autoconfig.TraceAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.integration.channel.interceptor.GlobalChannelInterceptorWrapper;
 import org.springframework.integration.config.GlobalChannelInterceptor;
+import org.springframework.messaging.support.MessageHeaderAccessor;
 
 /**
  * {@link org.springframework.boot.autoconfigure.EnableAutoConfiguration
@@ -34,7 +39,6 @@ import org.springframework.integration.config.GlobalChannelInterceptor;
  *
  * @author Spencer Gibb
  * @since 1.0.0
- *
  * @see TracingChannelInterceptor
  */
 @Configuration
@@ -47,9 +51,32 @@ import org.springframework.integration.config.GlobalChannelInterceptor;
 public class TraceSpringIntegrationAutoConfiguration {
 
 	@Bean
-	@GlobalChannelInterceptor(patterns = "${spring.sleuth.integration.patterns:*}")
-	public TracingChannelInterceptor traceChannelInterceptor(Tracing tracing) {
-		return new TracingChannelInterceptor(tracing);
+	public GlobalChannelInterceptorWrapper tracingGlobalChannelInterceptorWrapper(
+			TracingChannelInterceptor interceptor, SleuthMessagingProperties properties) {
+		GlobalChannelInterceptorWrapper wrapper = new GlobalChannelInterceptorWrapper(
+				interceptor);
+		wrapper.setPatterns(properties.getIntegration().getPatterns());
+		return wrapper;
+	}
+
+	@Bean
+	TracingChannelInterceptor traceChannelInterceptor(Tracing tracing,
+			Propagation.Setter<MessageHeaderAccessor, String> traceMessagePropagationSetter,
+			Propagation.Getter<MessageHeaderAccessor, String> traceMessagePropagationGetter) {
+		return new TracingChannelInterceptor(tracing, traceMessagePropagationSetter,
+				traceMessagePropagationGetter);
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
+	Propagation.Setter<MessageHeaderAccessor, String> traceMessagePropagationSetter() {
+		return MessageHeaderPropagation.INSTANCE;
+	}
+
+	@Bean
+	@ConditionalOnMissingBean
+	Propagation.Getter<MessageHeaderAccessor, String> traceMessagePropagationGetter() {
+		return MessageHeaderPropagation.INSTANCE;
 	}
 
 }

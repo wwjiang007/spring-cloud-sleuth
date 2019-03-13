@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,22 +29,29 @@ import reactor.util.Loggers;
 import reactor.util.context.Context;
 
 /**
- * A trace representation of the {@link Subscriber}
+ * A trace representation of the {@link Subscriber}.
  *
+ * @deprecated use {@link ScopePassingSpanSubscriber} instead
+ * @param <T> - return type of the subscriber
  * @author Stephane Maldini
  * @author Marcin Grzejszczak
  * @since 2.0.0
  */
+@Deprecated
 final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<T> {
 
-	private static final Logger log = Loggers.getLogger(
-			SpanSubscriber.class);
+	private static final Logger log = Loggers.getLogger(SpanSubscriber.class);
 
 	private final Span span;
+
 	private final Span rootSpan;
+
 	private final Subscriber<? super T> subscriber;
+
 	private final Context context;
+
 	private final Tracer tracer;
+
 	private Subscription s;
 
 	SpanSubscriber(Subscriber<? super T> subscriber, Context ctx, Tracing tracing,
@@ -59,16 +66,17 @@ final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<
 		if (log.isTraceEnabled()) {
 			log.trace("Stored context root span [{}]", this.rootSpan);
 		}
-		this.span = root != null ?
-				this.tracer.nextSpan(TraceContextOrSamplingFlags.create(root.context()))
-						.name(name) : this.tracer.nextSpan().name(name);
+		this.span = root != null ? this.tracer
+				.nextSpan(TraceContextOrSamplingFlags.create(root.context())).name(name)
+				: this.tracer.nextSpan().name(name);
 		if (log.isTraceEnabled()) {
 			log.trace("Created span [{}], with name [{}]", this.span, name);
 		}
 		this.context = ctx.put(Span.class, this.span);
 	}
 
-	@Override public void onSubscribe(Subscription subscription) {
+	@Override
+	public void onSubscribe(Subscription subscription) {
 		if (log.isTraceEnabled()) {
 			log.trace("On subscribe");
 		}
@@ -81,7 +89,8 @@ final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<
 		}
 	}
 
-	@Override public void request(long n) {
+	@Override
+	public void request(long n) {
 		if (log.isTraceEnabled()) {
 			log.trace("Request");
 		}
@@ -98,7 +107,8 @@ final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<
 		}
 	}
 
-	@Override public void cancel() {
+	@Override
+	public void cancel() {
 		try {
 			if (log.isTraceEnabled()) {
 				log.trace("Cancel");
@@ -110,11 +120,13 @@ final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<
 		}
 	}
 
-	@Override public void onNext(T o) {
+	@Override
+	public void onNext(T o) {
 		this.subscriber.onNext(o);
 	}
 
-	@Override public void onError(Throwable throwable) {
+	@Override
+	public void onError(Throwable throwable) {
 		try {
 			this.subscriber.onError(throwable);
 		}
@@ -123,7 +135,8 @@ final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<
 		}
 	}
 
-	@Override public void onComplete() {
+	@Override
+	public void onComplete() {
 		try {
 			this.subscriber.onComplete();
 		}
@@ -150,7 +163,9 @@ final class SpanSubscriber<T> extends AtomicBoolean implements SpanSubscription<
 		}
 	}
 
-	@Override public Context currentContext() {
+	@Override
+	public Context currentContext() {
 		return this.context;
 	}
+
 }

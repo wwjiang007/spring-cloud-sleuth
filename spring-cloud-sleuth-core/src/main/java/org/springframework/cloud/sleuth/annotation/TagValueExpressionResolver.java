@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,12 +25,11 @@ package org.springframework.cloud.sleuth.annotation;
 public interface TagValueExpressionResolver {
 
 	/**
-	 * Returns the tag value for the given parameter and the provided expression
-	 *
+	 * Returns the tag value for the given parameter and the provided expression.
 	 * @param expression - the expression coming from {@link SpanTag#expression()}
 	 * @param parameter - parameter annotated with {@link SpanTag}
 	 * @return the value of the tag
 	 */
 	String resolve(String expression, Object parameter);
-	
+
 }

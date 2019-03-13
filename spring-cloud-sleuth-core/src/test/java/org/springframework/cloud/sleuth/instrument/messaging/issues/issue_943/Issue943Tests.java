@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.util.stream.Collectors;
 import brave.Span;
 import brave.Tracer;
 import org.junit.Test;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.ConfigurableApplicationContext;
@@ -29,42 +30,50 @@ import org.springframework.web.client.RestTemplate;
 import static org.assertj.core.api.BDDAssertions.then;
 
 /**
- * Example taken from https://github.com/spring-cloud/spring-cloud-sleuth/issues/943
+ * Example taken from https://github.com/spring-cloud/spring-cloud-sleuth/issues/943 .
+ *
+ * @author Marcin Grzejszczak
  */
 public class Issue943Tests {
 
 	@Test
 	public void should_pass_tracing_context_via_spring_integration() {
-		try (ConfigurableApplicationContext applicationContext = SpringApplication
-				.run(HelloSpringIntegration.class, "--spring.jmx.enabled=false", "--server.port=0")) {
+		try (ConfigurableApplicationContext applicationContext = SpringApplication.run(
+				HelloSpringIntegration.class, "--spring.jmx.enabled=false",
+				"--server.port=0")) {
 			// given
 			Tracer tracer = applicationContext.getBean(Tracer.class);
 			Span newSpan = tracer.nextSpan().name("foo").start();
 			String object;
 			try (Tracer.SpanInScope ws = tracer.withSpanInScope(newSpan)) {
-				RestTemplate restTemplate = applicationContext.getBean(RestTemplate.class);
+				RestTemplate restTemplate = applicationContext
+						.getBean(RestTemplate.class);
 				// when
-				object = restTemplate.getForObject(
-						"http://localhost:" + applicationContext.getEnvironment()
-								.getProperty("local.server.port") + "/getHelloWorldMessage",
-						String.class);
+				object = restTemplate
+						.getForObject(
+								"http://localhost:"
+										+ applicationContext.getEnvironment()
+												.getProperty("local.server.port")
+										+ "/getHelloWorldMessage",
+								String.class);
 			}
 
 			// then
-			ArrayListSpanReporter accumulator = applicationContext.getBean(ArrayListSpanReporter.class);
-			then(object)
-					.contains("Hellow World Message 1 Persist into DB")
+			ArrayListSpanReporter accumulator = applicationContext
+					.getBean(ArrayListSpanReporter.class);
+			then(object).contains("Hellow World Message 1 Persist into DB")
 					.contains("Hellow World Message 2 Persist into DB")
 					.contains("Hellow World Message 3 Persist into DB");
-			then(accumulator.getSpans().stream()
-					.filter(span -> span.traceId().equals(newSpan.context().traceIdString()))
-					.map(span -> span.tags().getOrDefault("channel", span.tags().get("http.path")))
+			then(accumulator.getSpans().stream().filter(
+					span -> span.traceId().equals(newSpan.context().traceIdString()))
+					.map(span -> span.tags().getOrDefault("channel",
+							span.tags().get("http.path")))
 					.collect(Collectors.toList()))
-					.as("trace context was propagated successfully")
-					.isNotEmpty()
-					.contains("splitterOutChannel", "messagingChannel",
-							"messagingProcessedChannel", "messagingOutputChannel",
-							"/getHelloWorldMessage");
+							.as("trace context was propagated successfully").isNotEmpty()
+							.contains("splitterOutChannel", "messagingChannel",
+									"messagingProcessedChannel", "messagingOutputChannel",
+									"/getHelloWorldMessage");
 		}
 	}
+
 }

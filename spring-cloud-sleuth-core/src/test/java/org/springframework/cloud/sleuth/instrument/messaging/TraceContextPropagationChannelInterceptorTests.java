@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,7 @@ import brave.sampler.Sampler;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -38,9 +39,7 @@ import org.springframework.messaging.PollableChannel;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNotNull;
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Spencer Gibb
@@ -50,39 +49,48 @@ import static org.junit.Assert.assertNotNull;
 @DirtiesContext
 public class TraceContextPropagationChannelInterceptorTests {
 
-	@Autowired @Qualifier("channel") private PollableChannel channel;
+	@Autowired
+	@Qualifier("channel")
+	private PollableChannel channel;
 
-	@Autowired private Tracing tracing;
-	@Autowired private ArrayListSpanReporter reporter;
+	@Autowired
+	private Tracing tracing;
 
-	@After public void close() {
+	@Autowired
+	private ArrayListSpanReporter reporter;
+
+	@After
+	public void close() {
 		this.reporter.clear();
 	}
 
-	@Test public void testSpanPropagation() {
+	@Test
+	public void testSpanPropagation() {
 		Span span = this.tracing.tracer().nextSpan().name("http:testSendMessage").start();
 		String expectedSpanId = SpanUtil.idToHex(span.context().spanId());
 		try (Tracer.SpanInScope ws = this.tracing.tracer().withSpanInScope(span)) {
 			this.channel.send(MessageBuilder.withPayload("hi").build());
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
 		Message<?> message = this.channel.receive(0);
-		assertNotNull("message was null", message);
+		assertThat(message).as("message was null").isNotNull();
 
-		String spanId =
-				message.getHeaders().get(TraceMessageHeaders.SPAN_ID_NAME, String.class);
-		assertNotEquals("spanId was equal to parent's id", expectedSpanId, spanId);
+		String spanId = message.getHeaders().get(TraceMessageHeaders.SPAN_ID_NAME,
+				String.class);
+		assertThat(spanId).as("spanId was equal to parent's id")
+				.isNotEqualTo(expectedSpanId);
 
-		String traceId = message.getHeaders()
-				.get(TraceMessageHeaders.TRACE_ID_NAME, String.class);
-		assertNotNull("traceId was null", traceId);
+		String traceId = message.getHeaders().get(TraceMessageHeaders.TRACE_ID_NAME,
+				String.class);
+		assertThat(traceId).as("traceId was null").isNotNull();
 
-		String parentId = message.getHeaders()
-				.get(TraceMessageHeaders.PARENT_ID_NAME, String.class);
-		assertEquals("parentId was not equal to parent's id",
-				this.reporter.getSpans().get(0).id(), parentId);
+		String parentId = message.getHeaders().get(TraceMessageHeaders.PARENT_ID_NAME,
+				String.class);
+		assertThat(parentId).as("parentId was not equal to parent's id")
+				.isEqualTo(this.reporter.getSpans().get(0).id());
 
 	}
 
@@ -90,16 +98,21 @@ public class TraceContextPropagationChannelInterceptorTests {
 	@EnableAutoConfiguration
 	static class App {
 
-		@Bean public QueueChannel channel() {
+		@Bean
+		public QueueChannel channel() {
 			return new QueueChannel();
 		}
 
-		@Bean Sampler testSampler() {
+		@Bean
+		Sampler testSampler() {
 			return Sampler.ALWAYS_SAMPLE;
 		}
 
-		@Bean ArrayListSpanReporter reporter() {
+		@Bean
+		ArrayListSpanReporter reporter() {
 			return new ArrayListSpanReporter();
 		}
+
 	}
+
 }

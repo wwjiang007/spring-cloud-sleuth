@@ -1,6 +1,5 @@
-
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,17 +16,18 @@
 
 package org.springframework.cloud.sleuth.instrument.web;
 
+import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
 
 import brave.Span;
 import brave.Tracer;
-import brave.Tracing;
 import brave.sampler.Sampler;
 import org.awaitility.Awaitility;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.sleuth.SpanName;
@@ -35,6 +35,7 @@ import org.springframework.cloud.sleuth.instrument.DefaultTestAutoConfiguration;
 import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.SimpleAsyncTaskExecutor;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.test.context.junit4.SpringRunner;
@@ -44,19 +45,21 @@ import static org.assertj.core.api.BDDAssertions.then;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = {
-		TraceAsyncIntegrationTests.TraceAsyncITestConfiguration.class },
-		properties = "spring.sleuth.http.legacy.enabled=true")
+		TraceAsyncIntegrationTests.TraceAsyncITestConfiguration.class }, properties = "spring.sleuth.http.legacy.enabled=true")
 public class TraceAsyncIntegrationTests {
 
 	@Autowired
 	ClassPerformingAsyncLogic classPerformingAsyncLogic;
+
 	@Autowired
 	Tracer tracer;
+
 	@Autowired
 	ArrayListSpanReporter reporter;
 
 	@Before
 	public void cleanup() {
+		this.reporter.clear();
 		this.classPerformingAsyncLogic.clear();
 	}
 
@@ -80,7 +83,8 @@ public class TraceAsyncIntegrationTests {
 
 		try (Tracer.SpanInScope ws = this.tracer.withSpanInScope(span)) {
 			whenAsyncProcessingTakesPlace();
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
@@ -93,7 +97,8 @@ public class TraceAsyncIntegrationTests {
 
 		try (Tracer.SpanInScope ws = this.tracer.withSpanInScope(span)) {
 			whenAsyncProcessingTakesPlaceWithCustomSpanName();
-		} finally {
+		}
+		finally {
 			span.finish();
 		}
 
@@ -113,61 +118,56 @@ public class TraceAsyncIntegrationTests {
 	}
 
 	private void thenTraceIdIsPassedFromTheCurrentThreadToTheAsyncOne(final Span span) {
-		Awaitility.await().atMost(5, SECONDS).untilAsserted(
-				() -> {
-					then(TraceAsyncIntegrationTests.this.classPerformingAsyncLogic
-							.getSpan().context().traceId()).isEqualTo(span.context().traceId());
-					then(this.reporter.getSpans()).hasSize(2);
-					// HTTP
-					then(this.reporter.getSpans().get(0).name()).isEqualTo("http:existing");
-					// ASYNC
-					then(this.reporter.getSpans().get(1).tags())
-							.containsEntry("class", "ClassPerformingAsyncLogic")
-							.containsEntry("method", "invokeAsynchronousLogic");
-				});
+		Awaitility.await().atMost(5, SECONDS).untilAsserted(() -> {
+			then(TraceAsyncIntegrationTests.this.classPerformingAsyncLogic.getSpan()
+					.context().traceId()).isEqualTo(span.context().traceId());
+			then(this.reporter.getSpans()).hasSize(2);
+			// HTTP
+			then(this.reporter.getSpans().get(0).name()).isEqualTo("http:existing");
+			// ASYNC
+			then(this.reporter.getSpans().get(1).tags())
+					.containsEntry("class", "ClassPerformingAsyncLogic")
+					.containsEntry("method", "invokeAsynchronousLogic");
+		});
 	}
 
 	private void thenANewAsyncSpanGetsCreated() {
-		Awaitility.await().atMost(5, SECONDS).untilAsserted(
-				() -> {
-					then(this.reporter.getSpans()).hasSize(1);
-					zipkin2.Span storedSpan = this.reporter.getSpans().get(0);
-					then(storedSpan.name()).isEqualTo("invoke-asynchronous-logic");
-					then(storedSpan.tags())
-							.containsEntry("class", "ClassPerformingAsyncLogic")
-							.containsEntry("method", "invokeAsynchronousLogic");
-				});
+		Awaitility.await().atMost(5, SECONDS).untilAsserted(() -> {
+			then(this.reporter.getSpans()).hasSize(1);
+			zipkin2.Span storedSpan = this.reporter.getSpans().get(0);
+			then(storedSpan.name()).isEqualTo("invoke-asynchronous-logic");
+			then(storedSpan.tags()).containsEntry("class", "ClassPerformingAsyncLogic")
+					.containsEntry("method", "invokeAsynchronousLogic");
+		});
 	}
 
-	private void thenTraceIdIsPassedFromTheCurrentThreadToTheAsyncOneAndSpanHasCustomName(final Span span) {
-		Awaitility.await().atMost(5, SECONDS).untilAsserted(
-				() -> {
-					then(TraceAsyncIntegrationTests.this.classPerformingAsyncLogic
-							.getSpan().context().traceId()).isEqualTo(span.context().traceId());
-					then(this.reporter.getSpans()).hasSize(2);
-					// HTTP
-					then(this.reporter.getSpans().get(0).name()).isEqualTo("http:existing");
-					// ASYNC
-					then(this.reporter.getSpans().get(1).tags())
-							.containsEntry("class", "ClassPerformingAsyncLogic")
-							.containsEntry("method", "customNameInvokeAsynchronousLogic");
-				});
+	private void thenTraceIdIsPassedFromTheCurrentThreadToTheAsyncOneAndSpanHasCustomName(
+			final Span span) {
+		Awaitility.await().atMost(5, SECONDS).untilAsserted(() -> {
+			then(TraceAsyncIntegrationTests.this.classPerformingAsyncLogic.getSpan()
+					.context().traceId()).isEqualTo(span.context().traceId());
+			then(this.reporter.getSpans()).hasSize(2);
+			// HTTP
+			then(this.reporter.getSpans().get(0).name()).isEqualTo("http:existing");
+			// ASYNC
+			then(this.reporter.getSpans().get(1).tags())
+					.containsEntry("class", "ClassPerformingAsyncLogic")
+					.containsEntry("method", "customNameInvokeAsynchronousLogic");
+		});
 	}
 
 	private void thenAsyncSpanHasCustomName() {
-		Awaitility.await().atMost(5, SECONDS).untilAsserted(
-				() -> {
-					then(this.reporter.getSpans()).hasSize(1);
-					zipkin2.Span storedSpan = this.reporter.getSpans().get(0);
-					then(storedSpan.name()).isEqualTo("foo");
-					then(storedSpan.tags())
-							.containsEntry("class", "ClassPerformingAsyncLogic")
-							.containsEntry("method", "customNameInvokeAsynchronousLogic");
-				});
+		Awaitility.await().atMost(5, SECONDS).untilAsserted(() -> {
+			then(this.reporter.getSpans()).hasSize(1);
+			zipkin2.Span storedSpan = this.reporter.getSpans().get(0);
+			then(storedSpan.name()).isEqualTo("foo");
+			then(storedSpan.tags()).containsEntry("class", "ClassPerformingAsyncLogic")
+					.containsEntry("method", "customNameInvokeAsynchronousLogic");
+		});
 	}
 
 	@After
-	public void cleanTrace(){
+	public void cleanTrace() {
 		this.reporter.clear();
 	}
 
@@ -191,19 +191,29 @@ public class TraceAsyncIntegrationTests {
 			return new ArrayListSpanReporter();
 		}
 
+		@Bean
+		Executor fooExecutor() {
+			return new SimpleAsyncTaskExecutor();
+		}
+
+		@Bean
+		Executor barExecutor() {
+			return new SimpleAsyncTaskExecutor();
+		}
+
 	}
 
 	static class ClassPerformingAsyncLogic {
 
-		AtomicReference<Span> span = new AtomicReference<>();
-
 		private final Tracer tracer;
+
+		AtomicReference<Span> span = new AtomicReference<>();
 
 		ClassPerformingAsyncLogic(Tracer tracer) {
 			this.tracer = tracer;
 		}
 
-		@Async
+		@Async("fooExecutor")
 		public void invokeAsynchronousLogic() {
 			this.span.set(this.tracer.currentSpan());
 		}
@@ -221,5 +231,7 @@ public class TraceAsyncIntegrationTests {
 		public void clear() {
 			this.span.set(null);
 		}
+
 	}
+
 }

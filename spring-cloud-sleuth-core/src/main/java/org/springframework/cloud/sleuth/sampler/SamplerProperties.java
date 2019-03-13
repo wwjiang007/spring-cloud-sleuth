@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@ package org.springframework.cloud.sleuth.sampler;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Properties related to sampling
+ * Properties related to sampling.
  *
  * @author Marcin Grzejszczak
  * @author Adrian Cole
@@ -35,6 +35,18 @@ public class SamplerProperties {
 	 */
 	private float probability = 0.1f;
 
+	/**
+	 * A rate per second can be a nice choice for low-traffic endpoints as it allows you
+	 * surge protection. For example, you may never expect the endpoint to get more than
+	 * 50 requests per second. If there was a sudden surge of traffic, to 5000 requests
+	 * per second, you would still end up with 50 traces per second. Conversely, if you
+	 * had a percentage, like 10%, the same surge would end up with 500 traces per second,
+	 * possibly overloading your storage. Amazon X-Ray includes a rate-limited sampler
+	 * (named Reservoir) for this purpose. Brave has taken the same approach via the
+	 * {@link brave.sampler.RateLimitingSampler}.
+	 */
+	private Integer rate;
+
 	public float getProbability() {
 		return this.probability;
 	}
@@ -42,4 +54,13 @@ public class SamplerProperties {
 	public void setProbability(float probability) {
 		this.probability = probability;
 	}
+
+	public Integer getRate() {
+		return this.rate;
+	}
+
+	public void setRate(Integer rate) {
+		this.rate = rate;
+	}
+
 }

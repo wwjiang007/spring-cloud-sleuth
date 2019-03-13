@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,19 +22,20 @@ import java.util.stream.Collectors;
 import brave.Tracing;
 import brave.sampler.Sampler;
 import feign.okhttp.OkHttpClient;
-import zipkin2.Span;
-import zipkin2.reporter.Reporter;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import zipkin2.Span;
+import zipkin2.reporter.Reporter;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.sleuth.instrument.web.TraceWebServletAutoConfiguration;
-import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignClient;
+import org.springframework.cloud.sleuth.instrument.web.TraceWebServletAutoConfiguration;
+import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.ResponseEntity;
@@ -48,18 +49,30 @@ import org.springframework.web.client.RestTemplate;
 
 import static org.assertj.core.api.BDDAssertions.then;
 
+@FeignClient(name = "no-name", url = "http://localhost:9978")
+interface MyNameRemote {
+
+	@RequestMapping(value = "/name/{id}", method = RequestMethod.GET)
+	String getName(@PathVariable("id") String id);
+
+}
+
 /**
  * @author Marcin Grzejszczak
  */
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringBootTest(classes = Application.class, webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
-@TestPropertySource(properties = {"spring.application.name=demo-feign-uri",
-		"server.port=9978", "eureka.client.enabled=true", "ribbon.eureka.enabled=true"})
+@TestPropertySource(properties = { "spring.application.name=demo-feign-uri",
+		"server.port=9978", "eureka.client.enabled=true", "ribbon.eureka.enabled=true" })
 public class Issue393Tests {
 
 	RestTemplate template = new RestTemplate();
-	@Autowired ArrayListSpanReporter reporter;
-	@Autowired Tracing tracer;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
+
+	@Autowired
+	Tracing tracer;
 
 	@Before
 	public void open() {
@@ -76,9 +89,10 @@ public class Issue393Tests {
 		List<Span> spans = this.reporter.getSpans();
 		// retries
 		then(spans).hasSize(2);
-		then(spans.stream().map(span -> span.tags().get("http.path")).collect(
-				Collectors.toList())).containsOnly("/name/mikesarver");
+		then(spans.stream().map(span -> span.tags().get("http.path"))
+				.collect(Collectors.toList())).containsOnly("/name/mikesarver");
 	}
+
 }
 
 @Configuration
@@ -88,8 +102,7 @@ public class Issue393Tests {
 class Application {
 
 	@Bean
-	public DemoController demoController(
-			MyNameRemote myNameRemote) {
+	public DemoController demoController(MyNameRemote myNameRemote) {
 		return new DemoController(myNameRemote);
 	}
 
@@ -116,31 +129,23 @@ class Application {
 
 }
 
-@FeignClient(name="no-name",
-		url="http://localhost:9978")
-interface MyNameRemote {
-
-	@RequestMapping(value = "/name/{id}", method = RequestMethod.GET)
-	String getName(@PathVariable("id") String id);
-}
-
 @RestController
 class DemoController {
 
 	private final MyNameRemote myNameRemote;
 
-	public DemoController(
-			MyNameRemote myNameRemote) {
+	DemoController(MyNameRemote myNameRemote) {
 		this.myNameRemote = myNameRemote;
 	}
 
-	@RequestMapping(value = "/hello/{name}")
+	@RequestMapping("/hello/{name}")
 	public String getHello(@PathVariable("name") String name) {
-		return myNameRemote.getName(name) + " foo";
+		return this.myNameRemote.getName(name) + " foo";
 	}
 
-	@RequestMapping(value = "/name/{name}")
+	@RequestMapping("/name/{name}")
 	public String getName(@PathVariable("name") String name) {
 		return name;
 	}
+
 }

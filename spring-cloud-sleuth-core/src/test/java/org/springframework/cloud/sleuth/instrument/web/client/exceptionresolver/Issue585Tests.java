@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,16 +16,19 @@
 
 package org.springframework.cloud.sleuth.instrument.web.client.exceptionresolver;
 
-import javax.servlet.http.HttpServletRequest;
 import java.time.Instant;
+
+import javax.servlet.http.HttpServletRequest;
 
 import brave.Span;
 import brave.Tracing;
 import brave.sampler.Sampler;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -44,8 +47,6 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-
 import static org.assertj.core.api.BDDAssertions.then;
 
 @RunWith(SpringRunner.class)
@@ -53,8 +54,12 @@ import static org.assertj.core.api.BDDAssertions.then;
 public class Issue585Tests {
 
 	TestRestTemplate testRestTemplate = new TestRestTemplate();
-	@Autowired ArrayListSpanReporter reporter;
-	@LocalServerPort int port;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
+
+	@LocalServerPort
+	int port;
 
 	@Test
 	public void should_report_span_when_using_custom_exception_resolver() {
@@ -64,52 +69,56 @@ public class Issue585Tests {
 
 		then(Tracing.current().tracer().currentSpan()).isNull();
 		then(entity.getStatusCode().value()).isEqualTo(500);
-		then(this.reporter.getSpans().get(0).tags())
-				.containsEntry("custom", "tag")
+		then(this.reporter.getSpans().get(0).tags()).containsEntry("custom", "tag")
 				.containsKeys("error");
 	}
+
 }
 
 @SpringBootApplication
 class TestConfig {
 
-	@Bean ArrayListSpanReporter testSpanReporter() {
+	@Bean
+	ArrayListSpanReporter testSpanReporter() {
 		return new ArrayListSpanReporter();
 	}
 
-	@Bean Sampler testSampler() {
+	@Bean
+	Sampler testSampler() {
 		return Sampler.ALWAYS_SAMPLE;
 	}
+
 }
 
 @RestController
 class TestController {
 
-	private final static Logger logger = LoggerFactory.getLogger(
-			TestController.class);
+	private final static Logger logger = LoggerFactory.getLogger(TestController.class);
 
 	@RequestMapping(value = "sleuthtest", method = RequestMethod.GET)
 	public ResponseEntity<String> testSleuth(@RequestParam String greeting) {
 		if (greeting.equalsIgnoreCase("hello")) {
 			return new ResponseEntity<>("Hello World", HttpStatus.OK);
-		} else {
+		}
+		else {
 			throw new RuntimeException("This is a test error");
 		}
 	}
+
 }
 
 @ControllerAdvice
 class CustomExceptionHandler extends ResponseEntityExceptionHandler {
 
 	private final static Logger logger = LoggerFactory
-			.getLogger(
-					CustomExceptionHandler.class);
+			.getLogger(CustomExceptionHandler.class);
 
-	@Autowired private Tracing tracer;
+	@Autowired
+	private Tracing tracer;
 
-	@ExceptionHandler(value = { Exception.class })
-	protected ResponseEntity<ExceptionResponse> handleDefaultError(
-			Exception ex, HttpServletRequest request) {
+	@ExceptionHandler(Exception.class)
+	protected ResponseEntity<ExceptionResponse> handleDefaultError(Exception ex,
+			HttpServletRequest request) {
 		ExceptionResponse exceptionResponse = new ExceptionResponse("ERR-01",
 				ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR,
 				request.getRequestURI(), Instant.now().toEpochMilli());
@@ -118,7 +127,7 @@ class CustomExceptionHandler extends ResponseEntityExceptionHandler {
 	}
 
 	private void reportErrorSpan(String message) {
-		Span span = tracer.tracer().currentSpan();
+		Span span = this.tracer.tracer().currentSpan();
 		span.annotate("ERROR: " + message);
 		span.tag("custom", "tag");
 		logger.info("Foo");
@@ -128,10 +137,15 @@ class CustomExceptionHandler extends ResponseEntityExceptionHandler {
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
 class ExceptionResponse {
+
 	private String errorCode;
+
 	private String errorMessage;
+
 	private HttpStatus httpStatus;
+
 	private String path;
+
 	private Long epochTime;
 
 	ExceptionResponse(String errorCode, String errorMessage, HttpStatus httpStatus,
@@ -144,7 +158,7 @@ class ExceptionResponse {
 	}
 
 	public String getErrorCode() {
-		return errorCode;
+		return this.errorCode;
 	}
 
 	public void setErrorCode(String errorCode) {
@@ -152,7 +166,7 @@ class ExceptionResponse {
 	}
 
 	public String getErrorMessage() {
-		return errorMessage;
+		return this.errorMessage;
 	}
 
 	public void setErrorMessage(String errorMessage) {
@@ -160,7 +174,7 @@ class ExceptionResponse {
 	}
 
 	public HttpStatus getHttpStatus() {
-		return httpStatus;
+		return this.httpStatus;
 	}
 
 	public void setHttpStatus(HttpStatus httpStatus) {
@@ -168,7 +182,7 @@ class ExceptionResponse {
 	}
 
 	public String getPath() {
-		return path;
+		return this.path;
 	}
 
 	public void setPath(String path) {
@@ -176,7 +190,7 @@ class ExceptionResponse {
 	}
 
 	public Long getEpochTime() {
-		return epochTime;
+		return this.epochTime;
 	}
 
 	public void setEpochTime(Long epochTime) {

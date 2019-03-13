@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,13 +16,12 @@
 
 package org.springframework.cloud.sleuth.instrument.async.issues.issue546;
 
-import java.lang.invoke.MethodHandles;
-
 import brave.Tracing;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -44,23 +43,25 @@ import static org.assertj.core.api.BDDAssertions.then;
  * @author Marcin Grzejszczak
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = Issue546TestsApp.class,
-		properties = {"ribbon.eureka.enabled=false", "feign.hystrix.enabled=false", "server.port=0"},
-		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(classes = Issue546TestsApp.class, properties = {
+		"ribbon.eureka.enabled=false", "feign.hystrix.enabled=false",
+		"server.port=0" }, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public class Issue546Tests {
 
-	@Autowired Environment environment;
+	@Autowired
+	Environment environment;
 
 	@Test
 	public void should_pass_tracing_info_when_using_callbacks() {
-		new RestTemplate()
-				.getForObject("http://localhost:" + port() + "/trace-async-rest-template",
-						String.class);
+		new RestTemplate().getForObject(
+				"http://localhost:" + port() + "/trace-async-rest-template",
+				String.class);
 	}
 
 	private int port() {
 		return this.environment.getProperty("local.server.port", Integer.class);
 	}
+
 }
 
 @SpringBootApplication
@@ -75,30 +76,34 @@ class Issue546TestsApp {
 
 @RestController
 class Controller {
-	private static final Log log = LogFactory.getLog(MethodHandles.lookup().lookupClass());
+
+	private static final Log log = LogFactory.getLog(Controller.class);
 
 	private final AsyncRestTemplate traceAsyncRestTemplate;
+
 	private final Tracing tracer;
 
-	public Controller(AsyncRestTemplate traceAsyncRestTemplate, Tracing tracer) {
+	@Value("${server.port}")
+	private String port;
+
+	Controller(AsyncRestTemplate traceAsyncRestTemplate, Tracing tracer) {
 		this.traceAsyncRestTemplate = traceAsyncRestTemplate;
 		this.tracer = tracer;
 	}
 
-	@Value("${server.port}") private String port;
-
-	@RequestMapping(value = "/bean") public HogeBean bean() {
+	@RequestMapping("/bean")
+	public HogeBean bean() {
 		log.info("(/bean) I got a request!");
 		return new HogeBean("test", 18);
 	}
 
-	@RequestMapping(value = "/trace-async-rest-template")
+	@RequestMapping("/trace-async-rest-template")
 	public void asyncTest(@RequestParam(required = false) boolean isSleep)
 			throws InterruptedException {
 		log.info("(/trace-async-rest-template) I got a request!");
-		final long traceId = tracer.tracer().currentSpan().context().traceId();
-		ListenableFuture<ResponseEntity<HogeBean>> res = traceAsyncRestTemplate
-				.getForEntity("http://localhost:" + port + "/bean", HogeBean.class);
+		final long traceId = this.tracer.tracer().currentSpan().context().traceId();
+		ListenableFuture<ResponseEntity<HogeBean>> res = this.traceAsyncRestTemplate
+				.getForEntity("http://localhost:" + this.port + "/bean", HogeBean.class);
 		if (isSleep) {
 			Thread.sleep(1000);
 		}
@@ -120,10 +125,12 @@ class Controller {
 }
 
 class HogeBean {
+
 	private String name;
+
 	private int age;
 
-	public HogeBean(String name, int age) {
+	HogeBean(String name, int age) {
 		this.name = name;
 		this.age = age;
 	}
@@ -143,4 +150,5 @@ class HogeBean {
 	public void setAge(int age) {
 		this.age = age;
 	}
+
 }

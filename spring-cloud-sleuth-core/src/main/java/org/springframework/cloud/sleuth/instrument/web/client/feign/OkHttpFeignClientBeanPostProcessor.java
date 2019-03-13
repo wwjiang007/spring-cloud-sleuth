@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,15 +18,15 @@ package org.springframework.cloud.sleuth.instrument.web.client.feign;
 
 import feign.Client;
 import feign.okhttp.OkHttpClient;
+
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 
 /**
- * Post processor that wraps takes care of the OkHttp Feign Client instrumentation
+ * Post processor that wraps takes care of the OkHttp Feign Client instrumentation.
  *
  * @author Marcin Grzejszczak
- *
  * @since 1.1.3
  */
 final class OkHttpFeignClientBeanPostProcessor implements BeanPostProcessor {
@@ -51,4 +51,5 @@ final class OkHttpFeignClientBeanPostProcessor implements BeanPostProcessor {
 			throws BeansException {
 		return bean;
 	}
+
 }

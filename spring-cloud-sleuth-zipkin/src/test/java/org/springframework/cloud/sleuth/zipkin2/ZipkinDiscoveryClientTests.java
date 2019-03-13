@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -28,6 +28,7 @@ import org.awaitility.Awaitility;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,14 +43,22 @@ import static org.assertj.core.api.BDDAssertions.then;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = ZipkinDiscoveryClientTests.Config.class, properties = {
-		"spring.zipkin.baseUrl=http://zipkin/",
-		"spring.zipkin.sender.type=web" // override default priority which picks rabbit due to classpath
+		"spring.zipkin.baseUrl=http://zipkin/", "spring.zipkin.sender.type=web" // override
+																				// default
+																				// priority
+																				// which
+																				// picks
+																				// rabbit
+																				// due to
+																				// classpath
 })
 public class ZipkinDiscoveryClientTests {
 
-	@ClassRule public static MockWebServer ZIPKIN_RULE = new MockWebServer();
+	@ClassRule
+	public static MockWebServer ZIPKIN_RULE = new MockWebServer();
 
-	@Autowired Tracing tracing;
+	@Autowired
+	Tracing tracing;
 
 	@Test
 	public void shouldUseDiscoveryClientToFindZipkinUrlIfPresent() throws Exception {
@@ -57,36 +66,41 @@ public class ZipkinDiscoveryClientTests {
 
 		span.finish();
 
-		Awaitility.await().untilAsserted(() -> then(ZIPKIN_RULE.getRequestCount()).isGreaterThan(0));
+		Awaitility.await().untilAsserted(
+				() -> then(ZIPKIN_RULE.getRequestCount()).isGreaterThan(0));
 	}
 
 	@Configuration
 	@EnableAutoConfiguration
 	static class Config {
 
-		@Bean Sampler sampler() {
+		@Bean
+		Sampler sampler() {
 			return Sampler.ALWAYS_SAMPLE;
 		}
 
-		@Bean LoadBalancerClient loadBalancerClient() {
+		@Bean
+		LoadBalancerClient loadBalancerClient() {
 			return new LoadBalancerClient() {
-				@Override public <T> T execute(String serviceId,
-						LoadBalancerRequest<T> request) throws IOException {
-					return null;
-				}
-
-				@Override public <T> T execute(String serviceId,
-						ServiceInstance serviceInstance, LoadBalancerRequest<T> request)
+				@Override
+				public <T> T execute(String serviceId, LoadBalancerRequest<T> request)
 						throws IOException {
 					return null;
 				}
 
-				@Override public URI reconstructURI(ServiceInstance instance,
-						URI original) {
+				@Override
+				public <T> T execute(String serviceId, ServiceInstance serviceInstance,
+						LoadBalancerRequest<T> request) throws IOException {
 					return null;
 				}
 
-				@Override public ServiceInstance choose(String serviceId) {
+				@Override
+				public URI reconstructURI(ServiceInstance instance, URI original) {
+					return null;
+				}
+
+				@Override
+				public ServiceInstance choose(String serviceId) {
 					return new ServiceInstance() {
 						@Override
 						public String getServiceId() {
@@ -121,5 +135,7 @@ public class ZipkinDiscoveryClientTests {
 				}
 			};
 		}
+
 	}
+
 }

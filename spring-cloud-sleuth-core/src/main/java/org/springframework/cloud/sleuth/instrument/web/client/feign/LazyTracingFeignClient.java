@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,10 +24,11 @@ import feign.Request;
 import feign.Response;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.beans.factory.BeanFactory;
 
 /**
- * Lazilly resolves the Trace Feign Client
+ * Lazilly resolves the Trace Feign Client.
  *
  * @author Marcin Grzejszczak
  * @since 2.0.0
@@ -36,27 +37,33 @@ class LazyTracingFeignClient implements Client {
 
 	private static final Log log = LogFactory.getLog(LazyTracingFeignClient.class);
 
-	private Client tracingFeignClient;
-	private HttpTracing httpTracing;
 	private final BeanFactory beanFactory;
+
 	private final Client delegate;
+
+	private Client tracingFeignClient;
+
+	private HttpTracing httpTracing;
 
 	LazyTracingFeignClient(BeanFactory beanFactory, Client delegate) {
 		this.beanFactory = beanFactory;
 		this.delegate = delegate;
 	}
 
-	@Override public Response execute(Request request, Request.Options options)
-			throws IOException {
+	@Override
+	public Response execute(Request request, Request.Options options) throws IOException {
 		if (log.isDebugEnabled()) {
-			log.debug("Sending a request via tracing feign client");
+			log.debug(
+					"Sending a request via tracing feign client [" + tracingFeignClient()
+							+ "] " + "and the delegate [" + this.delegate + "]");
 		}
 		return tracingFeignClient().execute(request, options);
 	}
 
 	private Client tracingFeignClient() {
 		if (this.tracingFeignClient == null) {
-			this.tracingFeignClient = TracingFeignClient.create(httpTracing(), this.delegate);
+			this.tracingFeignClient = TracingFeignClient.create(httpTracing(),
+					this.delegate);
 		}
 		return this.tracingFeignClient;
 	}
@@ -67,4 +74,5 @@ class LazyTracingFeignClient implements Client {
 		}
 		return this.httpTracing;
 	}
+
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,8 @@ import brave.Tracing;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
+import reactor.core.CoreSubscriber;
+import reactor.core.publisher.BaseSubscriber;
 import reactor.util.context.Context;
 
 import static org.assertj.core.api.BDDAssertions.then;
@@ -36,16 +38,16 @@ public class ScopePassingSpanSubscriberTests {
 
 	@Test
 	public void should_propagate_current_context() {
-		ScopePassingSpanSubscriber subscriber = new ScopePassingSpanSubscriber(
-				null, Context.of("foo", "bar"), this.tracing);
+		ScopePassingSpanSubscriber<?> subscriber = new ScopePassingSpanSubscriber<>(null,
+				Context.of("foo", "bar"), this.tracing, null);
 
 		then((String) subscriber.currentContext().get("foo")).isEqualTo("bar");
 	}
 
 	@Test
 	public void should_set_empty_context_when_context_is_null() {
-		ScopePassingSpanSubscriber subscriber = new ScopePassingSpanSubscriber(
-				null, null, this.tracing);
+		ScopePassingSpanSubscriber<?> subscriber = new ScopePassingSpanSubscriber<>(null,
+				null, this.tracing, null);
 
 		then(subscriber.currentContext().isEmpty()).isTrue();
 	}
@@ -53,12 +55,15 @@ public class ScopePassingSpanSubscriberTests {
 	@Test
 	public void should_put_current_span_to_context() {
 		Span span = this.tracing.tracer().nextSpan();
-		try (Tracer.SpanInScope ws = this.tracing.tracer().withSpanInScope(span.start())) {
-			ScopePassingSpanSubscriber subscriber = new ScopePassingSpanSubscriber(
-					null, Context.empty(), this.tracing);
+		try (Tracer.SpanInScope ws = this.tracing.tracer()
+				.withSpanInScope(span.start())) {
+			CoreSubscriber<?> subscriber = ReactorSleuth.scopePassingSpanSubscription(
+					this.tracing, new BaseSubscriber<Object>() {
+					});
 
 			then(subscriber.currentContext().get(Span.class)).isEqualTo(span);
 		}
 
 	}
+
 }

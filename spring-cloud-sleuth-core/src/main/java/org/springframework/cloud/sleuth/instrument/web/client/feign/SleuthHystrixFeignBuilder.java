@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,21 +21,22 @@ import feign.Client;
 import feign.Feign;
 import feign.Retryer;
 import feign.hystrix.HystrixFeign;
+
 import org.springframework.beans.BeansException;
 import org.springframework.beans.factory.BeanFactory;
 
 /**
  * Contains {@link Feign.Builder} implementation that delegates execution
- * {@link HystrixFeign} with tracing components
- * that close spans upon completion of request processing.
+ * {@link HystrixFeign} with tracing components that close spans upon completion of
+ * request processing.
  *
  * @author Marcin Grzejszczak
- *
  * @since 1.0.4
  */
 final class SleuthHystrixFeignBuilder {
 
-	private SleuthHystrixFeignBuilder() {}
+	private SleuthHystrixFeignBuilder() {
+	}
 
 	static Feign.Builder builder(BeanFactory beanFactory) {
 		return HystrixFeign.builder().retryer(Retryer.NEVER_RETRY)
@@ -46,9 +47,11 @@ final class SleuthHystrixFeignBuilder {
 		try {
 			Client client = beanFactory.getBean(Client.class);
 			return new LazyClient(beanFactory, client);
-		} catch (BeansException e) {
+		}
+		catch (BeansException ex) {
 			return TracingFeignClient.create(beanFactory.getBean(HttpTracing.class),
 					new Client.Default(null, null));
 		}
 	}
+
 }

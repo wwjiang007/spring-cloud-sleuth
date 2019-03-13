@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,17 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RestController;
 
+@FeignClient("zipkin")
+interface Zipkin {
+
+	@RequestMapping(value = "/call", method = RequestMethod.GET)
+	String call();
+
+	@RequestMapping(value = "/hi2", method = RequestMethod.GET)
+	String hi2();
+
+}
+
 /**
  * @author Spencer Gibb
  * @author Dave Syer
@@ -32,6 +43,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SampleController {
 
 	private final Zipkin zipkin;
+
 	private final Random random = new Random();
 
 	@Autowired
@@ -52,13 +64,4 @@ public class SampleController {
 		return "call/" + s;
 	}
 
-}
-
-@FeignClient("zipkin")
-interface Zipkin {
-	@RequestMapping(value = "/call", method = RequestMethod.GET)
-	String call();
-
-	@RequestMapping(value = "/hi2", method = RequestMethod.GET)
-	String hi2();
 }

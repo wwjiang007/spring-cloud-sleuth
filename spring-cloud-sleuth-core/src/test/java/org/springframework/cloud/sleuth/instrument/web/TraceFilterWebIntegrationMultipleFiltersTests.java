@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,6 +21,7 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicReference;
+
 import javax.annotation.PreDestroy;
 import javax.servlet.FilterChain;
 import javax.servlet.ServletException;
@@ -32,6 +33,7 @@ import brave.Tracing;
 import brave.sampler.Sampler;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
@@ -53,20 +55,36 @@ import static org.assertj.core.api.BDDAssertions.then;
  * @author Marcin Grzejszczak
  */
 @RunWith(SpringRunner.class)
-@SpringBootTest(classes = { TraceFilterWebIntegrationMultipleFiltersTests.Config.class },
-		webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-		properties = "spring.sleuth.http.legacy.enabled=true")
+@SpringBootTest(classes = {
+		TraceFilterWebIntegrationMultipleFiltersTests.Config.class }, webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = "spring.sleuth.http.legacy.enabled=true")
 public class TraceFilterWebIntegrationMultipleFiltersTests {
 
-	@Autowired Tracing tracer;
-	@Autowired RestTemplate restTemplate;
-	@Autowired Environment environment;
-	@Autowired MyFilter myFilter;
-	@Autowired ArrayListSpanReporter reporter;
+	@Autowired
+	Tracing tracer;
+
+	@Autowired
+	RestTemplate restTemplate;
+
+	@Autowired
+	Environment environment;
+
+	@Autowired
+	MyFilter myFilter;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
+
 	// issue #550
-	@Autowired @Qualifier("myExecutor") Executor myExecutor;
-	@Autowired @Qualifier("finalExecutor") Executor finalExecutor;
-	@Autowired MyExecutor cglibExecutor;
+	@Autowired
+	@Qualifier("myExecutor")
+	Executor myExecutor;
+
+	@Autowired
+	@Qualifier("finalExecutor")
+	Executor finalExecutor;
+
+	@Autowired
+	MyExecutor cglibExecutor;
 
 	@Test
 	public void should_register_trace_filter_before_the_custom_filter() {
@@ -90,76 +108,88 @@ public class TraceFilterWebIntegrationMultipleFiltersTests {
 	public static class Config {
 
 		// issue #550
-		@Bean Executor myExecutor() {
+		@Bean
+		Executor myExecutor() {
 			return new MyExecutorWithFinalMethod();
 		}
 
 		// issue #550
-		@Bean MyExecutor cglibExecutor() {
+		@Bean
+		MyExecutor cglibExecutor() {
 			return new MyExecutor();
 		}
 
 		// issue #550
-		@Bean MyFinalExecutor finalExecutor() {
+		@Bean
+		MyFinalExecutor finalExecutor() {
 			return new MyFinalExecutor();
 		}
 
-		@Bean Sampler alwaysSampler() {
+		@Bean
+		Sampler alwaysSampler() {
 			return Sampler.ALWAYS_SAMPLE;
 		}
 
-		@Bean RestTemplate restTemplate() {
+		@Bean
+		RestTemplate restTemplate() {
 			RestTemplate restTemplate = new RestTemplate();
 			restTemplate.setErrorHandler(new DefaultResponseErrorHandler() {
-				@Override public void handleError(ClientHttpResponse response)
-						throws IOException {
+				@Override
+				public void handleError(ClientHttpResponse response) throws IOException {
 				}
 			});
 			return restTemplate;
 		}
 
-		@Bean MyFilter myFilter(Tracing tracer) {
+		@Bean
+		MyFilter myFilter(Tracing tracer) {
 			return new MyFilter(tracer);
 		}
 
-		@Bean FilterRegistrationBean registrationBean(MyFilter myFilter) {
+		@Bean
+		FilterRegistrationBean registrationBean(MyFilter myFilter) {
 			FilterRegistrationBean bean = new FilterRegistrationBean();
 			bean.setFilter(myFilter);
 			bean.setOrder(0);
 			return bean;
 		}
 
-		@Bean ArrayListSpanReporter reporter() {
+		@Bean
+		ArrayListSpanReporter reporter() {
 			return new ArrayListSpanReporter();
 		}
+
 	}
 
 	static class MyFilter extends GenericFilterBean {
 
-		AtomicReference<Span> span = new AtomicReference<>();
-
 		private final Tracing tracer;
+
+		AtomicReference<Span> span = new AtomicReference<>();
 
 		MyFilter(Tracing tracer) {
 			this.tracer = tracer;
 		}
 
-		@Override public void doFilter(ServletRequest request, ServletResponse response,
+		@Override
+		public void doFilter(ServletRequest request, ServletResponse response,
 				FilterChain chain) throws IOException, ServletException {
-			Span currentSpan = tracer.tracer().currentSpan();
+			Span currentSpan = this.tracer.tracer().currentSpan();
 			this.span.set(currentSpan);
 		}
 
 		public AtomicReference<Span> getSpan() {
-			return span;
+			return this.span;
 		}
+
 	}
 
 	static class MyExecutor implements Executor {
 
 		private final Executor delegate = Executors.newSingleThreadExecutor();
 
-		@Override public void execute(Runnable command) {
+		@Override
+		public void execute(Runnable command) {
 			this.delegate.execute(command);
 		}
 
@@ -167,13 +197,15 @@ public class TraceFilterWebIntegrationMultipleFiltersTests {
 		public void destroy() {
 			((ExecutorService) this.delegate).shutdown();
 		}
+
 	}
 
 	static class MyExecutorWithFinalMethod implements Executor {
 
 		private final Executor delegate = Executors.newSingleThreadExecutor();
 
-		@Override public final void execute(Runnable command) {
+		@Override
+		public final void execute(Runnable command) {
 			this.delegate.execute(command);
 		}
 
@@ -181,13 +213,15 @@ public class TraceFilterWebIntegrationMultipleFiltersTests {
 		public void destroy() {
 			((ExecutorService) this.delegate).shutdown();
 		}
+
 	}
 
 	static final class MyFinalExecutor implements Executor {
 
 		private final Executor delegate = Executors.newSingleThreadExecutor();
 
-		@Override public void execute(Runnable command) {
+		@Override
+		public void execute(Runnable command) {
 			this.delegate.execute(command);
 		}
 
@@ -195,5 +229,7 @@ public class TraceFilterWebIntegrationMultipleFiltersTests {
 		public void destroy() {
 			((ExecutorService) this.delegate).shutdown();
 		}
+
 	}
+
 }

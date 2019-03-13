@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,6 +17,7 @@
 package org.springframework.cloud.sleuth.instrument.messaging.issues.issue_943;
 
 import brave.sampler.Sampler;
+
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -30,7 +31,8 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.web.client.RestTemplate;
 
 @SpringBootApplication
-@EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class,HibernateJpaAutoConfiguration.class})
+@EnableAutoConfiguration(exclude = { DataSourceAutoConfiguration.class,
+		HibernateJpaAutoConfiguration.class })
 @ImportResource("classpath:beans/applicationContext.xml")
 @EnableIntegration
 @EnableAsync
@@ -40,15 +42,19 @@ public class HelloSpringIntegration {
 		SpringApplication.run(HelloSpringIntegration.class, args);
 	}
 
-	@Bean Sampler sampler() {
+	@Bean
+	Sampler sampler() {
 		return Sampler.ALWAYS_SAMPLE;
 	}
 
-	@Bean RestTemplate restTemplate() {
+	@Bean
+	RestTemplate restTemplate() {
 		return new RestTemplate();
 	}
 
-	@Bean ArrayListSpanReporter accumulator() {
+	@Bean
+	ArrayListSpanReporter accumulator() {
 		return new ArrayListSpanReporter();
 	}
+
 }

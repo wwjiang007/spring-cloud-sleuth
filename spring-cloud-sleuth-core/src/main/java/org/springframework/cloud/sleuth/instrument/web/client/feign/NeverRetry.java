@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,9 +22,16 @@ import feign.Retryer;
 /**
  * This is essentially the same implementation of a Retryer that is in newer versions of
  * Feign. For the 1.0.x stream we add it here.
+ *
  * @author Ryan Baxter
  */
 public class NeverRetry implements Retryer {
+
+	/**
+	 * Default retry entry.
+	 */
+	public static final NeverRetry INSTANCE = new NeverRetry();
+
 	@Override
 	public void continueOrPropagate(RetryableException e) {
 		throw e;
@@ -35,5 +42,4 @@ public class NeverRetry implements Retryer {
 		return this;
 	}
 
-	public static final NeverRetry INSTANCE = new NeverRetry();
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,44 +17,58 @@
 package org.springframework.cloud.sleuth.log;
 
 import brave.Span;
-import brave.Tracing;
+import brave.Tracer;
 import brave.propagation.CurrentTraceContext.Scope;
-import brave.propagation.StrictCurrentTraceContext;
+import brave.propagation.ExtraFieldPropagation;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.slf4j.MDC;
-import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringBootConfiguration;
+import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.junit4.SpringRunner;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * @author Marcin Grzejszczak
  */
+@RunWith(SpringRunner.class)
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = {
+		"spring.sleuth.baggage-keys=my-baggage",
+		"spring.sleuth.propagation-keys=my-propagation",
+		"spring.sleuth.log.slf4j.whitelisted-mdc-keys=my-baggage,my-propagation" })
+@SpringBootConfiguration
+@EnableAutoConfiguration
 public class Slf4JSpanLoggerTest {
 
-	ArrayListSpanReporter reporter = new ArrayListSpanReporter();
-	Tracing tracing = Tracing.newBuilder()
-			.currentTraceContext(new StrictCurrentTraceContext())
-			.spanReporter(this.reporter)
-			.build();
+	@Autowired
+	Tracer tracer;
 
-	Span span = this.tracing.tracer().nextSpan().name("span").start();
-	Slf4jCurrentTraceContext slf4jCurrentTraceContext =
-			new Slf4jCurrentTraceContext(new StrictCurrentTraceContext());
+	@Autowired
+	Slf4jScopeDecorator slf4jScopeDecorator;
+
+	Span span;
 
 	@Before
 	@After
 	public void setup() {
 		MDC.clear();
+		this.span = this.tracer.nextSpan().name("span").start();
 	}
 
 	@Test
 	public void should_set_entries_to_mdc_from_span() throws Exception {
-		Scope scope = this.slf4jCurrentTraceContext.newScope(this.span.context());
+		Scope scope = this.slf4jScopeDecorator.decorateScope(this.span.context(), () -> {
+		});
 
-		assertThat(MDC.get("X-B3-TraceId")).isEqualTo(span.context().traceIdString());
-		assertThat(MDC.get("traceId")).isEqualTo(span.context().traceIdString());
+		assertThat(MDC.get("X-B3-TraceId"))
+				.isEqualTo(this.span.context().traceIdString());
+		assertThat(MDC.get("traceId")).isEqualTo(this.span.context().traceIdString());
 
 		scope.close();
 
@@ -63,12 +77,49 @@ public class Slf4JSpanLoggerTest {
 	}
 
 	@Test
+	public void should_set_entries_to_mdc_from_span_with_baggage() throws Exception {
+		ExtraFieldPropagation.set(this.span.context(), "my-baggage", "my-value");
+		ExtraFieldPropagation.set(this.span.context(), "my-propagation",
+				"my-propagation-value");
+		Scope scope = this.slf4jScopeDecorator.decorateScope(this.span.context(), () -> {
+		});
+
+		assertThat(MDC.get("my-baggage")).isEqualTo("my-value");
+		assertThat(MDC.get("my-propagation")).isEqualTo("my-propagation-value");
+
+		scope.close();
+
+		assertThat(MDC.get("my-baggage")).isNullOrEmpty();
+		assertThat(MDC.get("my-propagation")).isNullOrEmpty();
+	}
+
+	@Test
+	public void should_remove_entries_from_mdc_for_null_span() throws Exception {
+		ExtraFieldPropagation.set(this.span.context(), "my-baggage", "my-value");
+		ExtraFieldPropagation.set(this.span.context(), "my-propagation",
+				"my-propagation-value");
+		this.slf4jScopeDecorator.decorateScope(this.span.context(), () -> {
+		});
+
+		assertThat(MDC.get("my-baggage")).isEqualTo("my-value");
+		assertThat(MDC.get("my-propagation")).isEqualTo("my-propagation-value");
+
+		Scope scope = this.slf4jScopeDecorator.decorateScope(null, () -> {
+		});
+
+		scope.close();
+
+		assertThat(MDC.get("my-baggage")).isNullOrEmpty();
+		assertThat(MDC.get("my-propagation")).isNullOrEmpty();
+	}
+
+	@Test
 	public void should_remove_entries_from_mdc_from_null_span() throws Exception {
 		MDC.put("X-B3-TraceId", "A");
 		MDC.put("traceId", "A");
 
-		Scope scope = this.slf4jCurrentTraceContext
-				.newScope(null);
+		Scope scope = this.slf4jScopeDecorator.decorateScope(null, () -> {
+		});
 
 		assertThat(MDC.get("X-B3-TraceId")).isNullOrEmpty();
 		assertThat(MDC.get("traceId")).isNullOrEmpty();
@@ -78,4 +129,5 @@ public class Slf4JSpanLoggerTest {
 		assertThat(MDC.get("X-B3-TraceId")).isEqualTo("A");
 		assertThat(MDC.get("traceId")).isEqualTo("A");
 	}
+
 }

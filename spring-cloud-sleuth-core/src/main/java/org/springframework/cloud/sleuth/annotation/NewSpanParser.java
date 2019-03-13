@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,12 @@ import org.aopalliance.intercept.MethodInvocation;
  */
 public interface NewSpanParser {
 
-	/** Override to control the name and tags on an annotation-based span */
+	/**
+	 * Override to control the name and tags on an annotation-based span.
+	 * @param methodInvocation method invocation annotated with new span
+	 * @param newSpan meta data of the new span
+	 * @param span span to customize
+	 */
 	void parse(MethodInvocation methodInvocation, NewSpan newSpan, SpanCustomizer span);
+
 }

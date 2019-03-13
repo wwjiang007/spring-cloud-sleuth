@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import brave.Span;
 import brave.Tracer;
 import brave.Tracing;
-import brave.propagation.StrictCurrentTraceContext;
+import brave.propagation.StrictScopeDecorator;
+import brave.propagation.ThreadLocalCurrentTraceContext;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
+
 import org.springframework.cloud.sleuth.DefaultSpanNamer;
 import org.springframework.cloud.sleuth.SpanName;
 import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
@@ -38,11 +40,14 @@ import static org.assertj.core.api.BDDAssertions.then;
 public class TraceRunnableTests {
 
 	ExecutorService executor = Executors.newSingleThreadExecutor();
+
 	ArrayListSpanReporter reporter = new ArrayListSpanReporter();
+
 	Tracing tracing = Tracing.newBuilder()
-			.currentTraceContext(new StrictCurrentTraceContext())
-			.spanReporter(this.reporter)
-			.build();
+			.currentTraceContext(ThreadLocalCurrentTraceContext.newBuilder()
+					.addScopeDecorator(StrictScopeDecorator.create()).build())
+			.spanReporter(this.reporter).build();
+
 	Tracer tracer = this.tracing.tracer();
 
 	@After
@@ -92,14 +97,14 @@ public class TraceRunnableTests {
 	}
 
 	@Test
-	public void should_take_name_of_span_from_span_name_annotation()
-			throws Exception {
+	public void should_take_name_of_span_from_span_name_annotation() throws Exception {
 		TraceKeepingRunnable traceKeepingRunnable = runnableThatRetrievesTraceFromThreadLocal();
 
 		whenRunnableGetsSubmitted(traceKeepingRunnable);
 
 		then(this.reporter.getSpans()).hasSize(1);
-		then(this.reporter.getSpans().get(0).name()).isEqualTo("some-runnable-name-from-annotation");
+		then(this.reporter.getSpans().get(0).name())
+				.isEqualTo("some-runnable-name-from-annotation");
 	}
 
 	@Test
@@ -111,7 +116,8 @@ public class TraceRunnableTests {
 		whenRunnableGetsSubmitted(runnable);
 
 		then(this.reporter.getSpans()).hasSize(1);
-		then(this.reporter.getSpans().get(0).name()).isEqualTo("some-runnable-name-from-to-string");
+		then(this.reporter.getSpans().get(0).name())
+				.isEqualTo("some-runnable-name-from-to-string");
 	}
 
 	private TraceKeepingRunnable runnableThatRetrievesTraceFromThreadLocal() {
@@ -123,8 +129,9 @@ public class TraceRunnableTests {
 	}
 
 	private void whenRunnableGetsSubmitted(Runnable runnable) throws Exception {
-		this.executor.submit(new TraceRunnable(this.tracing, new DefaultSpanNamer(),
-				runnable)).get();
+		this.executor
+				.submit(new TraceRunnable(this.tracing, new DefaultSpanNamer(), runnable))
+				.get();
 	}
 
 	private void whenNonTraceableRunnableGetsSubmitted(Runnable runnable)
@@ -136,10 +143,11 @@ public class TraceRunnableTests {
 		return new Runnable() {
 			@Override
 			public void run() {
-				span.set(tracer.currentSpan());
+				span.set(TraceRunnableTests.this.tracer.currentSpan());
 			}
 
-			@Override public String toString() {
+			@Override
+			public String toString() {
 				return "some-runnable-name-from-to-string";
 			}
 		};
@@ -160,6 +168,7 @@ public class TraceRunnableTests {
 		public void run() {
 			this.span = this.tracer.currentSpan();
 		}
+
 	}
 
 }

@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,6 +18,7 @@ package org.springframework.cloud.sleuth.instrument.zuul;
 
 import javax.servlet.http.HttpServletResponse;
 
+import brave.Span;
 import brave.Tracer;
 import brave.http.HttpServerHandler;
 import brave.http.HttpTracing;
@@ -26,10 +27,11 @@ import com.netflix.zuul.ZuulFilter;
 import com.netflix.zuul.context.RequestContext;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.http.HttpStatus;
 
 /**
- * A post request {@link ZuulFilter}
+ * A post request {@link ZuulFilter}.
  *
  * @author Dave Syer
  * @since 1.0.0
@@ -39,11 +41,11 @@ class TracePostZuulFilter extends ZuulFilter {
 	private static final Log log = LogFactory.getLog(TracePostZuulFilter.class);
 
 	private final HttpServerHandler handler;
+
 	private final Tracer tracer;
 
 	TracePostZuulFilter(HttpTracing httpTracing) {
-		this.handler = HttpServerHandler.create(httpTracing,
-				new HttpServletAdapter());
+		this.handler = HttpServerHandler.create(httpTracing, new HttpServletAdapter());
 		this.tracer = httpTracing.tracing().tracer();
 	}
 
@@ -56,8 +58,10 @@ class TracePostZuulFilter extends ZuulFilter {
 		if (response.getStatus() == 0) {
 			return false;
 		}
-		HttpStatus.Series httpStatusSeries = HttpStatus.Series.valueOf(response.getStatus());
-		return httpStatusSeries == HttpStatus.Series.SUCCESSFUL || httpStatusSeries == HttpStatus.Series.REDIRECTION;
+		HttpStatus.Series httpStatusSeries = HttpStatus.Series
+				.valueOf(response.getStatus());
+		return httpStatusSeries == HttpStatus.Series.SUCCESSFUL
+				|| httpStatusSeries == HttpStatus.Series.REDIRECTION;
 	}
 
 	@Override
@@ -67,7 +71,11 @@ class TracePostZuulFilter extends ZuulFilter {
 		}
 		HttpServletResponse response = RequestContext.getCurrentContext().getResponse();
 		Throwable exception = RequestContext.getCurrentContext().getThrowable();
-		this.handler.handleSend(response, exception, this.tracer.currentSpan());
+		Span currentSpan = this.tracer.currentSpan();
+		this.handler.handleSend(response, exception, currentSpan);
+		if (log.isDebugEnabled()) {
+			log.debug("Handled send of " + currentSpan);
+		}
 		return null;
 	}
 

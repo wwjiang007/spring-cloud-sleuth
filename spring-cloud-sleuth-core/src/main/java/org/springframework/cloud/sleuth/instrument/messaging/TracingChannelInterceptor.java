@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,15 @@ import brave.Span;
 import brave.SpanCustomizer;
 import brave.Tracer;
 import brave.Tracing;
+import brave.propagation.Propagation;
 import brave.propagation.ThreadLocalSpan;
 import brave.propagation.TraceContext;
 import brave.propagation.TraceContextOrSamplingFlags;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
+
 import org.springframework.aop.support.AopUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.cloud.sleuth.util.SpanNameUtil;
 import org.springframework.integration.channel.AbstractMessageChannel;
 import org.springframework.integration.channel.DirectChannel;
@@ -33,6 +36,7 @@ import org.springframework.integration.context.IntegrationObjectSupport;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.MessageHandler;
+import org.springframework.messaging.MessageHeaders;
 import org.springframework.messaging.MessagingException;
 import org.springframework.messaging.support.ChannelInterceptorAdapter;
 import org.springframework.messaging.support.ErrorMessage;
@@ -40,68 +44,105 @@ import org.springframework.messaging.support.ExecutorChannelInterceptor;
 import org.springframework.messaging.support.GenericMessage;
 import org.springframework.messaging.support.MessageHeaderAccessor;
 import org.springframework.util.ClassUtils;
-import zipkin2.Endpoint;
 
 /**
- * This starts and propagates {@link Span.Kind#PRODUCER} span for each message sent (via native
- * headers. It also extracts or creates a {@link Span.Kind#CONSUMER} span for each message
- * received. This span is injected onto each message so it becomes the parent when a handler later
- * calls {@link MessageHandler#handleMessage(Message)}, or a another processing library calls {@link #nextSpan(Message)}.
+ * This starts and propagates {@link Span.Kind#PRODUCER} span for each message sent (via
+ * native headers. It also extracts or creates a {@link Span.Kind#CONSUMER} span for each
+ * message received. This span is injected onto each message so it becomes the parent when
+ * a handler later calls {@link MessageHandler#handleMessage(Message)}, or a another
+ * processing library calls {@link #nextSpan(Message)}.
  * <p>
- * <p>This implementation uses {@link ThreadLocalSpan} to propagate context between callbacks. This
- * is an alternative to {@code ThreadStatePropagationChannelInterceptor} which is less sensitive
- * to message manipulation by other interceptors.
+ * <p>
+ * This implementation uses {@link ThreadLocalSpan} to propagate context between
+ * callbacks. This is an alternative to {@code ThreadStatePropagationChannelInterceptor}
+ * which is less sensitive to message manipulation by other interceptors.
+ *
+ * @author Marcin Grzejszczak
  */
 public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		implements ExecutorChannelInterceptor {
 
+	/**
+	 * Name of the class in Spring Cloud Stream that is a direct channel.
+	 */
+	public static final String STREAM_DIRECT_CHANNEL = "org.springframework."
+			+ "cloud.stream.messaging.DirectWithAttributesChannel";
+
 	private static final Log log = LogFactory.getLog(TracingChannelInterceptor.class);
+
 	/**
 	 * Using the literal "broker" until we come up with a better solution.
 	 *
-	 * <p>If the message originated from a binder (consumer binding), there will be different
-	 * headers present (e.g. "KafkaHeaders.RECEIVED_TOPIC" Vs. "AmqpHeaders.CONSUMER_QUEUE"
-	 * (unless the application removes them before sending). These don't represent the broker,
-	 * rather a queue, and in any case the heuristics are not great. At least we might be able
-	 * to tell if this is rabbit or not (ex how spring-rabbit works). We need to think this
-	 * through before making an api, possibly experimenting.
+	 * <p>
+	 * If the message originated from a binder (consumer binding), there will be different
+	 * headers present (e.g. "KafkaHeaders.RECEIVED_TOPIC" Vs.
+	 * "AmqpHeaders.CONSUMER_QUEUE" (unless the application removes them before sending).
+	 * These don't represent the broker, rather a queue, and in any case the heuristics
+	 * are not great. At least we might be able to tell if this is rabbit or not (ex how
+	 * spring-rabbit works). We need to think this through before making an api, possibly
+	 * experimenting.
 	 *
-	 * <p>If the app is outbound only (producer), there's no indication of what type the
+	 * <p>
+	 * If the app is outbound only (producer), there's no indication of what type the
 	 * destination broker is. This may hint at a non-manual solution being overwriting the
-	 * remoteServiceName later, similar to how servlet instrumentation lazy set "http.route".
+	 * remoteServiceName later, similar to how servlet instrumentation lazy set
+	 * "http.route".
 	 */
 	private static final String REMOTE_SERVICE_NAME = "broker";
+
+	final Tracing tracing;
+
+	final Tracer tracer;
+
+	final ThreadLocalSpan threadLocalSpan;
+
+	final TraceContext.Injector<MessageHeaderAccessor> injector;
+
+	final TraceContext.Extractor<MessageHeaderAccessor> extractor;
+
+	final boolean integrationObjectSupportPresent;
+
+	private final boolean hasDirectChannelClass;
+
+	// special case of a Stream
+	private final Class<?> directWithAttributesChannelClass;
+
+	@Autowired
+	TracingChannelInterceptor(Tracing tracing) {
+		this(tracing, MessageHeaderPropagation.INSTANCE,
+				MessageHeaderPropagation.INSTANCE);
+	}
+
+	TracingChannelInterceptor(Tracing tracing,
+			Propagation.Setter<MessageHeaderAccessor, String> setter,
+			Propagation.Getter<MessageHeaderAccessor, String> getter) {
+		this.tracing = tracing;
+		this.tracer = tracing.tracer();
+		this.threadLocalSpan = ThreadLocalSpan.create(this.tracer);
+		this.injector = tracing.propagation().injector(setter);
+		this.extractor = tracing.propagation().extractor(getter);
+		this.integrationObjectSupportPresent = ClassUtils.isPresent(
+				"org.springframework.integration.context.IntegrationObjectSupport", null);
+		this.hasDirectChannelClass = ClassUtils
+				.isPresent("org.springframework.integration.channel.DirectChannel", null);
+		this.directWithAttributesChannelClass = ClassUtils
+				.isPresent(STREAM_DIRECT_CHANNEL, null)
+						? ClassUtils.resolveClassName(STREAM_DIRECT_CHANNEL, null) : null;
+	}
 
 	public static TracingChannelInterceptor create(Tracing tracing) {
 		return new TracingChannelInterceptor(tracing);
 	}
 
-	final Tracing tracing;
-	final Tracer tracer;
-	final ThreadLocalSpan threadLocalSpan;
-	final TraceContext.Injector<MessageHeaderAccessor> injector;
-	final TraceContext.Extractor<MessageHeaderAccessor> extractor;
-	final boolean integrationObjectSupportPresent;
-
-	TracingChannelInterceptor(Tracing tracing) {
-		this.tracing = tracing;
-		this.tracer = tracing.tracer();
-		this.threadLocalSpan = ThreadLocalSpan.create(this.tracer);
-		this.injector = tracing.propagation()
-				.injector(MessageHeaderPropagation.INSTANCE);
-		this.extractor = tracing.propagation()
-				.extractor(MessageHeaderPropagation.INSTANCE);
-		this.integrationObjectSupportPresent = ClassUtils.isPresent(
-				"org.springframework.integration.context.IntegrationObjectSupport",
-				null);
-	}
-
 	/**
-	 * Use this to create a span for processing the given message. Note: the result has no name and is
-	 * not started.
+	 * Use this to create a span for processing the given message. Note: the result has no
+	 * name and is not started.
 	 * <p>
-	 * <p>This creates a child from identifiers extracted from the message headers, or a new span if
-	 * one couldn't be extracted.
+	 * <p>
+	 * This creates a child from identifiers extracted from the message headers, or a new
+	 * span if one couldn't be extracted.
+	 * @param message message to use for span creation
+	 * @return span to be created
 	 */
 	public Span nextSpan(Message<?> message) {
 		MessageHeaderAccessor headers = mutableHeaderAccessor(message);
@@ -120,7 +161,8 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 	/**
 	 * Starts and propagates {@link Span.Kind#PRODUCER} span for each message sent.
 	 */
-	@Override public Message<?> preSend(Message<?> message, MessageChannel channel) {
+	@Override
+	public Message<?> preSend(Message<?> message, MessageChannel channel) {
 		if (emptyMessage(message)) {
 			return message;
 		}
@@ -128,12 +170,12 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		MessageHeaderAccessor headers = mutableHeaderAccessor(retrievedMessage);
 		TraceContextOrSamplingFlags extracted = this.extractor.extract(headers);
 		Span span = this.threadLocalSpan.next(extracted);
-		MessageHeaderPropagation
-				.removeAnyTraceHeaders(headers, this.tracing.propagation().keys());
+		MessageHeaderPropagation.removeAnyTraceHeaders(headers,
+				this.tracing.propagation().keys());
 		this.injector.inject(span.context(), headers);
 		if (!span.isNoop()) {
 			span.kind(Span.Kind.PRODUCER).name("send").start();
-			span.remoteEndpoint(Endpoint.newBuilder().serviceName(REMOTE_SERVICE_NAME).build());
+			span.remoteServiceName(REMOTE_SERVICE_NAME);
 			addTags(message, span, channel);
 		}
 		if (log.isDebugEnabled()) {
@@ -146,23 +188,48 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		return outputMessage;
 	}
 
-	private Message<?> outputMessage(Message<?> originalMessage, Message<?> retrievedMessage, MessageHeaderAccessor additionalHeaders) {
-		MessageHeaderAccessor headers = MessageHeaderAccessor.getMutableAccessor(originalMessage);
+	private Message<?> outputMessage(Message<?> originalMessage,
+			Message<?> retrievedMessage, MessageHeaderAccessor additionalHeaders) {
+		MessageHeaderAccessor headers = MessageHeaderAccessor
+				.getMutableAccessor(originalMessage);
 		if (originalMessage.getPayload() instanceof MessagingException) {
-			headers.copyHeaders(MessageHeaderPropagation.propagationHeaders(additionalHeaders.getMessageHeaders(),
+			headers.copyHeaders(MessageHeaderPropagation.propagationHeaders(
+					additionalHeaders.getMessageHeaders(),
 					this.tracing.propagation().keys()));
-			return new ErrorMessage((MessagingException) originalMessage.getPayload(), headers.getMessageHeaders());
+			return new ErrorMessage((MessagingException) originalMessage.getPayload(),
+					isWebSockets(headers) ? headers.getMessageHeaders()
+							: new MessageHeaders(headers.getMessageHeaders()));
 		}
 		headers.copyHeaders(additionalHeaders.getMessageHeaders());
-		return new GenericMessage<>(retrievedMessage.getPayload(), headers.getMessageHeaders());
+		return new GenericMessage<>(retrievedMessage.getPayload(),
+				isWebSockets(headers) ? headers.getMessageHeaders()
+						: new MessageHeaders(headers.getMessageHeaders()));
+	}
+
+	private boolean isWebSockets(MessageHeaderAccessor headerAccessor) {
+		return headerAccessor.getMessageHeaders().containsKey("stompCommand")
+				|| headerAccessor.getMessageHeaders().containsKey("simpMessageType");
 	}
 
 	private boolean isDirectChannel(MessageChannel channel) {
-		return DirectChannel.class
-				.isAssignableFrom(AopUtils.getTargetClass(channel));
+		Class<?> targetClass = AopUtils.getTargetClass(channel);
+		boolean directChannel = this.hasDirectChannelClass
+				&& DirectChannel.class.isAssignableFrom(targetClass);
+		if (!directChannel) {
+			return false;
+		}
+		if (this.directWithAttributesChannelClass == null) {
+			return true;
+		}
+		return !isStreamSpecialDirectChannel(targetClass);
 	}
 
-	@Override public void afterSendCompletion(Message<?> message, MessageChannel channel,
+	private boolean isStreamSpecialDirectChannel(Class<?> targetClass) {
+		return this.directWithAttributesChannelClass.isAssignableFrom(targetClass);
+	}
+
+	@Override
+	public void afterSendCompletion(Message<?> message, MessageChannel channel,
 			boolean sent, Exception ex) {
 		if (emptyMessage(message)) {
 			return;
@@ -171,28 +238,30 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 			afterMessageHandled(message, channel, null, ex);
 		}
 		if (log.isDebugEnabled()) {
-			log.debug("Will finish the current span after completion " + this.tracer.currentSpan());
+			log.debug("Will finish the current span after completion "
+					+ this.tracer.currentSpan());
 		}
 		finishSpan(ex);
 	}
 
 	/**
-	 * This starts a consumer span as a child of the incoming message or the current trace context,
-	 * placing it in scope until the receive completes.
+	 * This starts a consumer span as a child of the incoming message or the current trace
+	 * context, placing it in scope until the receive completes.
 	 */
-	@Override public Message<?> postReceive(Message<?> message, MessageChannel channel) {
+	@Override
+	public Message<?> postReceive(Message<?> message, MessageChannel channel) {
 		if (emptyMessage(message)) {
 			return message;
 		}
 		MessageHeaderAccessor headers = mutableHeaderAccessor(message);
 		TraceContextOrSamplingFlags extracted = this.extractor.extract(headers);
 		Span span = this.threadLocalSpan.next(extracted);
-		MessageHeaderPropagation
-				.removeAnyTraceHeaders(headers, this.tracing.propagation().keys());
+		MessageHeaderPropagation.removeAnyTraceHeaders(headers,
+				this.tracing.propagation().keys());
 		this.injector.inject(span.context(), headers);
 		if (!span.isNoop()) {
 			span.kind(Span.Kind.CONSUMER).name("receive").start();
-			span.remoteEndpoint(Endpoint.newBuilder().serviceName(REMOTE_SERVICE_NAME).build());
+			span.remoteServiceName(REMOTE_SERVICE_NAME);
 			addTags(message, span, channel);
 		}
 		if (log.isDebugEnabled()) {
@@ -209,16 +278,18 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 			return;
 		}
 		if (log.isDebugEnabled()) {
-			log.debug("Will finish the current span after receive completion " + this.tracer.currentSpan());
+			log.debug("Will finish the current span after receive completion "
+					+ this.tracer.currentSpan());
 		}
 		finishSpan(ex);
 	}
 
 	/**
-	 * This starts a consumer span as a child of the incoming message or the current trace context.
-	 * It then creates a span for the handler, placing it in scope.
+	 * This starts a consumer span as a child of the incoming message or the current trace
+	 * context. It then creates a span for the handler, placing it in scope.
 	 */
-	@Override public Message<?> beforeHandle(Message<?> message, MessageChannel channel,
+	@Override
+	public Message<?> beforeHandle(Message<?> message, MessageChannel channel,
 			MessageHandler handler) {
 		if (emptyMessage(message)) {
 			return message;
@@ -229,40 +300,48 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 		Span consumerSpan = this.tracer.nextSpan(extracted);
 		if (!consumerSpan.isNoop()) {
 			consumerSpan.kind(Span.Kind.CONSUMER).start();
-			consumerSpan.remoteEndpoint(Endpoint.newBuilder().serviceName(REMOTE_SERVICE_NAME).build());
+			consumerSpan.remoteServiceName(REMOTE_SERVICE_NAME);
 			addTags(message, consumerSpan, channel);
 			consumerSpan.finish();
 		}
 		// create and scope a span for the message processor
-		this.threadLocalSpan.next(TraceContextOrSamplingFlags.create(consumerSpan.context()))
+		this.threadLocalSpan
+				.next(TraceContextOrSamplingFlags.create(consumerSpan.context()))
 				.name("handle").start();
-		// remove any trace headers, but don't re-inject as we are synchronously processing the
+		// remove any trace headers, but don't re-inject as we are synchronously
+		// processing the
 		// message and can rely on scoping to access this span later.
-		MessageHeaderPropagation
-				.removeAnyTraceHeaders(headers, this.tracing.propagation().keys());
+		MessageHeaderPropagation.removeAnyTraceHeaders(headers,
+				this.tracing.propagation().keys());
 		if (log.isDebugEnabled()) {
 			log.debug("Created a new span in before handle" + consumerSpan);
 		}
 		if (message instanceof ErrorMessage) {
-			return new ErrorMessage((Throwable) message.getPayload(), headers.getMessageHeaders());
+			return new ErrorMessage((Throwable) message.getPayload(),
+					headers.getMessageHeaders());
 		}
 		headers.setImmutable();
 		return new GenericMessage<>(message.getPayload(), headers.getMessageHeaders());
 	}
 
-	@Override public void afterMessageHandled(Message<?> message, MessageChannel channel,
+	@Override
+	public void afterMessageHandled(Message<?> message, MessageChannel channel,
 			MessageHandler handler, Exception ex) {
 		if (emptyMessage(message)) {
 			return;
 		}
 		if (log.isDebugEnabled()) {
-			log.debug("Will finish the current span after message handled " + this.tracer.currentSpan());
+			log.debug("Will finish the current span after message handled "
+					+ this.tracer.currentSpan());
 		}
 		finishSpan(ex);
 	}
 
 	/**
-	 * When an upstream context was not present, lookup keys are unlikely added
+	 * When an upstream context was not present, lookup keys are unlikely added.
+	 * @param message a message to append tags to
+	 * @param result span to customize
+	 * @param channel channel to which a message was sent
 	 */
 	void addTags(Message<?> message, SpanCustomizer result, MessageChannel channel) {
 		// TODO topic etc
@@ -293,12 +372,14 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 
 	void finishSpan(Exception error) {
 		Span span = this.threadLocalSpan.remove();
-		if (span == null || span.isNoop())
+		if (span == null || span.isNoop()) {
 			return;
+		}
 		if (error != null) { // an error occurred, adding error to span
 			String message = error.getMessage();
-			if (message == null)
+			if (message == null) {
 				message = error.getClass().getSimpleName();
+			}
 			span.tag("error", message);
 		}
 		span.finish();
@@ -322,4 +403,5 @@ public final class TracingChannelInterceptor extends ChannelInterceptorAdapter
 	private boolean emptyMessage(Message<?> message) {
 		return message == null;
 	}
+
 }

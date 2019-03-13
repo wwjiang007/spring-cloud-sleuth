@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,8 +17,10 @@
 package org.springframework.cloud.sleuth.instrument.web;
 
 import org.junit.Test;
+
 import org.springframework.beans.factory.NoSuchBeanDefinitionException;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.cloud.client.circuitbreaker.EnableCircuitBreaker;
 import org.springframework.cloud.openfeign.EnableFeignClients;
@@ -39,23 +41,23 @@ public class TraceNoWebEnvironmentTests {
 	@Test
 	public void should_work_when_using_web_client_without_the_web_environment() {
 		SpringApplication springApplication = new SpringApplication(Config.class);
-		springApplication.setWebEnvironment(false);
+		springApplication.setWebApplicationType(WebApplicationType.NONE);
 
 		try (ConfigurableApplicationContext context = springApplication.run()) {
 			Config.SomeFeignClient client = context.getBean(Config.SomeFeignClient.class);
 			client.createSomeTestRequest();
 		}
 		catch (Exception e) {
-			then(e.getCause().getClass()).isNotEqualTo(NoSuchBeanDefinitionException.class);
+			then(e.getCause().getClass())
+					.isNotEqualTo(NoSuchBeanDefinitionException.class);
 		}
 	}
 
 	@Configuration
 	@EnableAutoConfiguration
-	@EnableFeignClients
+	@EnableFeignClients(clients = Config.SomeFeignClient.class)
 	@EnableCircuitBreaker
-	public static class Config  {
-
+	public static class Config {
 
 		@FeignClient(name = "google", url = "https://www.google.com/")
 		public interface SomeFeignClient {
@@ -64,5 +66,7 @@ public class TraceNoWebEnvironmentTests {
 			String createSomeTestRequest();
 
 		}
+
 	}
+
 }

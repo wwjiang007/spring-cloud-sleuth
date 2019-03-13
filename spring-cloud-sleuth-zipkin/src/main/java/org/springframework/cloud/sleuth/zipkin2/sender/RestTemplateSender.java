@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,12 +20,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.util.List;
 
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.MediaType;
-import org.springframework.http.RequestEntity;
-import org.springframework.web.client.RestTemplate;
-
 import zipkin2.Call;
 import zipkin2.Callback;
 import zipkin2.CheckResult;
@@ -35,62 +29,84 @@ import zipkin2.codec.Encoding;
 import zipkin2.reporter.BytesMessageEncoder;
 import zipkin2.reporter.Sender;
 
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.RequestEntity;
+import org.springframework.web.client.RestTemplate;
+
 import static zipkin2.codec.SpanBytesEncoder.JSON_V2;
 
 final class RestTemplateSender extends Sender {
+
 	final RestTemplate restTemplate;
+
 	final String url;
 
 	final Encoding encoding;
+
 	final MediaType mediaType;
+
 	final BytesMessageEncoder messageEncoder;
 
-	RestTemplateSender(RestTemplate restTemplate, String baseUrl, BytesEncoder<Span> encoder) {
+	/**
+	 * close is typically called from a different thread.
+	 */
+	transient boolean closeCalled;
+
+	RestTemplateSender(RestTemplate restTemplate, String baseUrl,
+			BytesEncoder<Span> encoder) {
 		this.restTemplate = restTemplate;
 		this.encoding = encoder.encoding();
 		if (encoder.equals(JSON_V2)) {
 			this.mediaType = MediaType.APPLICATION_JSON;
 			this.url = baseUrl + (baseUrl.endsWith("/") ? "" : "/") + "api/v2/spans";
-		} else if (this.encoding == Encoding.PROTO3) {
+		}
+		else if (this.encoding == Encoding.PROTO3) {
 			this.mediaType = MediaType.parseMediaType("application/x-protobuf");
 			this.url = baseUrl + (baseUrl.endsWith("/") ? "" : "/") + "api/v2/spans";
-		} else if (this.encoding == Encoding.JSON) {
+		}
+		else if (this.encoding == Encoding.JSON) {
 			this.mediaType = MediaType.APPLICATION_JSON;
 			this.url = baseUrl + (baseUrl.endsWith("/") ? "" : "/") + "api/v1/spans";
-		} else {
-			throw new UnsupportedOperationException("Unsupported encoding: " + this.encoding.name());
+		}
+		else {
+			throw new UnsupportedOperationException(
+					"Unsupported encoding: " + this.encoding.name());
 		}
 		this.messageEncoder = BytesMessageEncoder.forEncoding(this.encoding);
 	}
 
-	@Override public Encoding encoding() {
+	@Override
+	public Encoding encoding() {
 		return this.encoding;
 	}
 
-	@Override public int messageMaxBytes() {
-		// This will drop a span larger than 5MiB. Note: values like 512KiB benchmark better.
+	@Override
+	public int messageMaxBytes() {
+		// This will drop a span larger than 5MiB. Note: values like 512KiB benchmark
+		// better.
 		return 5 * 1024 * 1024;
 	}
 
-	@Override public int messageSizeInBytes(List<byte[]> spans) {
+	@Override
+	public int messageSizeInBytes(List<byte[]> spans) {
 		return encoding().listSizeInBytes(spans);
 	}
 
-	/**
-	 * close is typically called from a different thread
-	 */
-	transient boolean closeCalled;
-
-	@Override public Call<Void> sendSpans(List<byte[]> encodedSpans) {
-		if (this.closeCalled)
+	@Override
+	public Call<Void> sendSpans(List<byte[]> encodedSpans) {
+		if (this.closeCalled) {
 			throw new IllegalStateException("close");
+		}
 		return new HttpPostCall(this.messageEncoder.encode(encodedSpans));
 	}
 
 	/**
 	 * Sends an empty json message to the configured endpoint.
 	 */
-	@Override public CheckResult check() {
+	@Override
+	public CheckResult check() {
 		try {
 			post(new byte[] { '[', ']' });
 			return CheckResult.OK;
@@ -100,7 +116,8 @@ final class RestTemplateSender extends Sender {
 		}
 	}
 
-	@Override public void close() {
+	@Override
+	public void close() {
 		this.closeCalled = true;
 	}
 
@@ -113,18 +130,21 @@ final class RestTemplateSender extends Sender {
 	}
 
 	class HttpPostCall extends Call.Base<Void> {
+
 		private final byte[] message;
 
 		HttpPostCall(byte[] message) {
 			this.message = message;
 		}
 
-		@Override protected Void doExecute() throws IOException {
+		@Override
+		protected Void doExecute() throws IOException {
 			post(this.message);
 			return null;
 		}
 
-		@Override protected void doEnqueue(Callback<Void> callback) {
+		@Override
+		protected void doEnqueue(Callback<Void> callback) {
 			try {
 				post(this.message);
 				callback.onSuccess(null);
@@ -134,8 +154,11 @@ final class RestTemplateSender extends Sender {
 			}
 		}
 
-		@Override public Call<Void> clone() {
+		@Override
+		public Call<Void> clone() {
 			return new HttpPostCall(this.message);
 		}
+
 	}
+
 }

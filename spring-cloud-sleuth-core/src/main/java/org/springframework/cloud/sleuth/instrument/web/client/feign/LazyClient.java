@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,24 +21,37 @@ import java.io.IOException;
 import feign.Client;
 import feign.Request;
 import feign.Response;
+
 import org.springframework.beans.factory.BeanFactory;
 
+/**
+ * Lazy implementation of the Feign Client.
+ *
+ * @author Marcin Grzejszczak
+ */
 class LazyClient implements Client {
 
 	private final BeanFactory beanFactory;
+
 	private final Client delegate;
+
+	private TraceFeignObjectWrapper wrapper;
 
 	LazyClient(BeanFactory beanFactory, Client delegate) {
 		this.beanFactory = beanFactory;
 		this.delegate = delegate;
 	}
 
-	@Override public Response execute(Request request, Request.Options options)
-			throws IOException {
+	@Override
+	public Response execute(Request request, Request.Options options) throws IOException {
 		return ((Client) wrapper().wrap(this.delegate)).execute(request, options);
 	}
 
 	private TraceFeignObjectWrapper wrapper() {
-		return new TraceFeignObjectWrapper(this.beanFactory);
+		if (this.wrapper == null) {
+			this.wrapper = new TraceFeignObjectWrapper(this.beanFactory);
+		}
+		return this.wrapper;
 	}
+
 }

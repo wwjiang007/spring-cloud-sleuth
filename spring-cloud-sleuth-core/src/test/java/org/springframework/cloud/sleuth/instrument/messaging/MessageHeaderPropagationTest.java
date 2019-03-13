@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,60 +19,90 @@ package org.springframework.cloud.sleuth.instrument.messaging;
 import java.util.Collections;
 
 import brave.propagation.Propagation;
-import org.junit.Assert;
 import org.junit.Test;
+
 import org.springframework.messaging.support.MessageHeaderAccessor;
+import org.springframework.messaging.support.NativeMessageHeaderAccessor;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.junit.Assert.*;
 
 public class MessageHeaderPropagationTest
 		extends PropagationSetterTest<MessageHeaderAccessor, String> {
+
 	MessageHeaderAccessor carrier = new MessageHeaderAccessor();
 
-	@Override public Propagation.KeyFactory<String> keyFactory() {
+	@Override
+	public Propagation.KeyFactory<String> keyFactory() {
 		return Propagation.KeyFactory.STRING;
 	}
 
-	@Override protected MessageHeaderAccessor carrier() {
-		return carrier;
+	@Override
+	protected MessageHeaderAccessor carrier() {
+		return this.carrier;
 	}
 
-	@Override protected Propagation.Setter<MessageHeaderAccessor, String> setter() {
+	@Override
+	protected Propagation.Setter<MessageHeaderAccessor, String> setter() {
 		return MessageHeaderPropagation.INSTANCE;
 	}
 
-	@Override protected Iterable<String> read(MessageHeaderAccessor carrier, String key) {
+	@Override
+	protected Iterable<String> read(MessageHeaderAccessor carrier, String key) {
 		Object result = carrier.getHeader(key);
-		return result != null ?
-				Collections.singleton(result.toString()) :
-				Collections.emptyList();
+		return result != null ? Collections.singleton(result.toString())
+				: Collections.emptyList();
 	}
-	
+
 	@Test
 	public void testGetByteArrayValue() {
 		MessageHeaderAccessor carrier = carrier();
 		carrier.setHeader("X-B3-TraceId", "48485a3953bb6124".getBytes());
 		carrier.setHeader("X-B3-TraceId", "48485a3953bb6124000000".getBytes());
 		String value = MessageHeaderPropagation.INSTANCE.get(carrier, "X-B3-TraceId");
-		assertEquals("48485a3953bb6124000000", value);
+		assertThat(value).isEqualTo("48485a3953bb6124000000");
 	}
-	
+
 	@Test
 	public void testGetStringValue() {
 		MessageHeaderAccessor carrier = carrier();
 		carrier.setHeader("X-B3-TraceId", "48485a3953bb6124");
 		carrier.setHeader("X-B3-TraceId", "48485a3953bb61240000000");
 		String value = MessageHeaderPropagation.INSTANCE.get(carrier, "X-B3-TraceId");
-		assertEquals("48485a3953bb61240000000", value);
+		assertThat(value).isEqualTo("48485a3953bb61240000000");
 	}
-	
+
 	@Test
 	public void testGetNullValue() {
 		MessageHeaderAccessor carrier = carrier();
 		carrier.setHeader("X-B3-TraceId", "48485a3953bb6124");
 		carrier.setHeader("X-B3-TraceId", "48485a3953bb61240000000");
 		String value = MessageHeaderPropagation.INSTANCE.get(carrier, "non existent key");
-		assertNull(value);
+		assertThat(value).isNull();
 	}
+
+	@Test
+	public void testSkipWrongValueTypeForGet() {
+		MessageHeaderAccessor carrier = carrier();
+		carrier.setHeader(NativeMessageHeaderAccessor.NATIVE_HEADERS,
+				"{spanTraceId=[123], spanId=[456], spanSampled=[0]}");
+		MessageHeaderPropagation.INSTANCE.get(carrier, "X-B3-SpanId");
+	}
+
+	@Test
+	public void testSkipWrongValueTypeForRemoval() {
+		MessageHeaderAccessor carrier = carrier();
+		carrier.setHeader(NativeMessageHeaderAccessor.NATIVE_HEADERS,
+				"{spanTraceId=[123], spanId=[456], spanSampled=[0]}");
+		MessageHeaderPropagation.removeAnyTraceHeaders(carrier,
+				Collections.singletonList("X-B3-SpanId"));
+	}
+
+	@Test
+	public void testSkipWrongValueTypeForPut() {
+		MessageHeaderAccessor carrier = carrier();
+		carrier.setHeader(NativeMessageHeaderAccessor.NATIVE_HEADERS,
+				"{spanTraceId=[123], spanId=[456], spanSampled=[0]}");
+		MessageHeaderPropagation.INSTANCE.put(carrier, "X-B3-SpanId", "1234");
+	}
+
 }

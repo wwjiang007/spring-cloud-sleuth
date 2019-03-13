@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,6 +24,7 @@ import org.junit.runner.RunWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
+
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 
 import static org.assertj.core.api.BDDAssertions.then;
@@ -34,9 +35,14 @@ import static org.assertj.core.api.BDDAssertions.then;
 @RunWith(MockitoJUnitRunner.class)
 public class LazyTraceAsyncCustomizerTest {
 
-	@Mock BeanFactory beanFactory;
-	@Mock AsyncConfigurer asyncConfigurer;
-	@InjectMocks LazyTraceAsyncCustomizer lazyTraceAsyncCustomizer;
+	@Mock
+	BeanFactory beanFactory;
+
+	@Mock
+	AsyncConfigurer asyncConfigurer;
+
+	@InjectMocks
+	LazyTraceAsyncCustomizer lazyTraceAsyncCustomizer;
 
 	@Test
 	public void should_wrap_async_executor_in_trace_version() throws Exception {
@@ -44,4 +50,5 @@ public class LazyTraceAsyncCustomizerTest {
 
 		then(executor).isExactlyInstanceOf(LazyTraceExecutor.class);
 	}
+
 }

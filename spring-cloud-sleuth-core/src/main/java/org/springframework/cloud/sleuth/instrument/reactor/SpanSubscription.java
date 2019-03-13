@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,9 +18,42 @@ package org.springframework.cloud.sleuth.instrument.reactor;
 
 import org.reactivestreams.Subscription;
 import reactor.core.CoreSubscriber;
+import reactor.core.Fuseable;
 
 /**
+ * A {@link SpanSubscription} is a {@link Subscription} that fakes being {@link Fuseable}
+ * (implementing {@link reactor.core.Fuseable.QueueSubscription} with default no-op
+ * methods and always negotiating fusion to be {@link Fuseable#NONE}).
+ *
+ * @param <T> - type of the subscription
  * @author Marcin Grzejszczak
  */
-interface SpanSubscription<T> extends Subscription, CoreSubscriber<T> {
+interface SpanSubscription<T>
+		extends Subscription, CoreSubscriber<T>, Fuseable.QueueSubscription<T> {
+
+	@Override
+	default T poll() {
+		return null;
+	}
+
+	@Override
+	default int requestFusion(int i) {
+		return Fuseable.NONE; // always negotiate to no fusion
+	}
+
+	@Override
+	default int size() {
+		return 0;
+	}
+
+	@Override
+	default boolean isEmpty() {
+		return true;
+	}
+
+	@Override
+	default void clear() {
+		// NO-OP
+	}
+
 }

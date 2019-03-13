@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ package org.springframework.cloud.sleuth.instrument.messaging.websocket;
 import brave.sampler.Sampler;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -44,32 +45,40 @@ public class TraceWebSocketAutoConfigurationTests {
 	@Autowired
 	DelegatingWebSocketMessageBrokerConfiguration delegatingWebSocketMessageBrokerConfiguration;
 
-	@Test public void should_register_interceptors_for_all_channels() {
+	@Test
+	public void should_register_interceptors_for_all_channels() {
 		then(this.delegatingWebSocketMessageBrokerConfiguration.clientInboundChannel()
 				.getInterceptors())
-				.hasAtLeastOneElementOfType(TracingChannelInterceptor.class);
+						.hasAtLeastOneElementOfType(TracingChannelInterceptor.class);
 		then(this.delegatingWebSocketMessageBrokerConfiguration.clientOutboundChannel()
 				.getInterceptors())
-				.hasAtLeastOneElementOfType(TracingChannelInterceptor.class);
+						.hasAtLeastOneElementOfType(TracingChannelInterceptor.class);
 		then(this.delegatingWebSocketMessageBrokerConfiguration.brokerChannel()
 				.getInterceptors())
-				.hasAtLeastOneElementOfType(TracingChannelInterceptor.class);
+						.hasAtLeastOneElementOfType(TracingChannelInterceptor.class);
 	}
 
-	@EnableAutoConfiguration @Configuration @EnableWebSocketMessageBroker
+	@EnableAutoConfiguration
+	@Configuration
+	@EnableWebSocketMessageBroker
 	public static class Config extends AbstractWebSocketMessageBrokerConfigurer {
 
-		@Override public void configureMessageBroker(MessageBrokerRegistry config) {
+		@Override
+		public void configureMessageBroker(MessageBrokerRegistry config) {
 			config.enableSimpleBroker("/topic");
 			config.setApplicationDestinationPrefixes("/app");
 		}
 
-		@Override public void registerStompEndpoints(StompEndpointRegistry registry) {
+		@Override
+		public void registerStompEndpoints(StompEndpointRegistry registry) {
 			registry.addEndpoint("/hello").withSockJS();
 		}
 
-		@Bean Sampler testSampler() {
+		@Bean
+		Sampler testSampler() {
 			return Sampler.ALWAYS_SAMPLE;
 		}
+
 	}
+
 }

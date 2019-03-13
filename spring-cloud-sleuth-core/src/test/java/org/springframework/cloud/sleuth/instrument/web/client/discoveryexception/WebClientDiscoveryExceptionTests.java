@@ -1,5 +1,5 @@
 /*
- * Copyright 2013-2018 the original author or authors.
+ * Copyright 2013-2019 the original author or authors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,24 +22,24 @@ import java.util.Map;
 
 import brave.Span;
 import brave.Tracer;
-import brave.Tracing;
 import brave.sampler.Sampler;
-import zipkin2.reporter.Reporter;
 import org.assertj.core.api.Assertions;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import zipkin2.reporter.Reporter;
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.cloud.sleuth.instrument.web.TraceWebServletAutoConfiguration;
-import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
 import org.springframework.cloud.netflix.eureka.EurekaClientAutoConfiguration;
+import org.springframework.cloud.netflix.ribbon.RibbonClient;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.cloud.openfeign.FeignClient;
-import org.springframework.cloud.netflix.ribbon.RibbonClient;
+import org.springframework.cloud.sleuth.instrument.web.TraceWebServletAutoConfiguration;
+import org.springframework.cloud.sleuth.util.ArrayListSpanReporter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.ResponseEntity;
@@ -61,10 +61,18 @@ import static org.springframework.boot.test.context.SpringBootTest.WebEnvironmen
 @DirtiesContext
 public class WebClientDiscoveryExceptionTests {
 
-	@Autowired TestFeignInterfaceWithException testFeignInterfaceWithException;
-	@Autowired @LoadBalanced RestTemplate template;
-	@Autowired Tracer tracer;
-	@Autowired ArrayListSpanReporter reporter;
+	@Autowired
+	TestFeignInterfaceWithException testFeignInterfaceWithException;
+
+	@Autowired
+	@LoadBalanced
+	RestTemplate template;
+
+	@Autowired
+	Tracer tracer;
+
+	@Autowired
+	ArrayListSpanReporter reporter;
 
 	@Before
 	public void close() {
@@ -89,11 +97,8 @@ public class WebClientDiscoveryExceptionTests {
 		// hystrix commands should finish at this point
 		Thread.sleep(200);
 		List<zipkin2.Span> spans = this.reporter.getSpans();
-		then(spans).hasSize(2);
-		then(spans.stream()
-				.filter(span1 -> span1.kind() == zipkin2.Span.Kind.CLIENT)
-				.findFirst()
-				.get().tags()).containsKey("error");
+		then(spans.stream().filter(span1 -> span1.kind() == zipkin2.Span.Kind.CLIENT)
+				.findFirst().get().tags()).containsKey("error");
 	}
 
 	@Test
@@ -111,13 +116,22 @@ public class WebClientDiscoveryExceptionTests {
 
 	@FeignClient("exceptionservice")
 	public interface TestFeignInterfaceWithException {
+
 		@RequestMapping(method = RequestMethod.GET, value = "/")
 		ResponseEntity<String> shouldFailToConnect();
+
+	}
+
+	@FunctionalInterface
+	interface ResponseEntityProvider {
+
+		ResponseEntity<?> get(WebClientDiscoveryExceptionTests webClientTests);
+
 	}
 
 	@Configuration
-	@EnableAutoConfiguration(exclude = {EurekaClientAutoConfiguration.class,
-			TraceWebServletAutoConfiguration.class})
+	@EnableAutoConfiguration(exclude = { EurekaClientAutoConfiguration.class,
+			TraceWebServletAutoConfiguration.class })
 	@EnableDiscoveryClient
 	@EnableFeignClients
 	@RibbonClient("exceptionservice")
@@ -129,18 +143,16 @@ public class WebClientDiscoveryExceptionTests {
 			return new RestTemplate();
 		}
 
-		@Bean Sampler alwaysSampler() {
+		@Bean
+		Sampler alwaysSampler() {
 			return Sampler.ALWAYS_SAMPLE;
 		}
 
-		@Bean Reporter<zipkin2.Span> mySpanReporter() {
+		@Bean
+		Reporter<zipkin2.Span> mySpanReporter() {
 			return new ArrayListSpanReporter();
 		}
+
 	}
 
-	@FunctionalInterface
-	interface ResponseEntityProvider {
-		ResponseEntity<?> get(
-				WebClientDiscoveryExceptionTests webClientTests);
-	}
 }
